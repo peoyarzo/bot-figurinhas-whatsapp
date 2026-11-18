@@ -1,0 +1,61 @@
+import { assertPairingChipAllowed } from './chip-guard.js';
+
+export type Env = {
+  PORT: number;
+  HOST: string;
+  NODE_ENV: string;
+  LOG_LEVEL: string;
+  ADMIN_TOKEN: string;
+  ADMIN_NUMBERS: string[];
+  LIBSQL_URL: string;
+  LIBSQL_AUTH_TOKEN?: string;
+  MOCK_WHATSAPP: boolean;
+  MOCK_MP: boolean;
+  MP_ACCESS_TOKEN?: string;
+  MP_WEBHOOK_SECRET?: string;
+  MP_PAYER_EMAIL: string;
+  MP_PAYER_FIRST_NAME: string;
+  PUBLIC_BASE_URL?: string;
+  PAIRING_NUMBER?: string;
+  FFMPEG_PATH?: string;
+};
+
+function read(source: NodeJS.ProcessEnv, key: string): string | undefined {
+  const value = source[key];
+  if (value == null) return undefined;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
+}
+
+export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
+  const token = read(source, 'ADMIN_TOKEN');
+  if (!token) throw new Error('ADMIN_TOKEN é obrigatório');
+  const port = Number(read(source, 'PORT') ?? '8787');
+  if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('PORT inválida');
+  const adminNumbers = (read(source, 'ADMIN_NUMBERS') ?? '')
+    .split(',')
+    .map((item) => item.replace(/\D/g, ''))
+    .filter(Boolean);
+  const pairing = read(source, 'PAIRING_NUMBER')?.replace(/\D/g, '');
+  assertPairingChipAllowed(pairing);
+  const base = read(source, 'PUBLIC_BASE_URL')?.replace(/\/$/, '');
+  return {
+    PORT: port,
+    HOST: read(source, 'HOST') ?? '0.0.0.0',
+    NODE_ENV: read(source, 'NODE_ENV') ?? 'development',
+    LOG_LEVEL: read(source, 'LOG_LEVEL') ?? 'info',
+    ADMIN_TOKEN: token,
+    ADMIN_NUMBERS: adminNumbers,
+    LIBSQL_URL: read(source, 'LIBSQL_URL') ?? 'file:local.db',
+    LIBSQL_AUTH_TOKEN: read(source, 'LIBSQL_AUTH_TOKEN'),
+    MOCK_WHATSAPP: read(source, 'MOCK_WHATSAPP') === '1',
+    MOCK_MP: read(source, 'MOCK_MP') === '1',
+    MP_ACCESS_TOKEN: read(source, 'MP_ACCESS_TOKEN'),
+    MP_WEBHOOK_SECRET: read(source, 'MP_WEBHOOK_SECRET'),
+    MP_PAYER_EMAIL: read(source, 'MP_PAYER_EMAIL') ?? 'pagador.sandbox@example.com',
+    MP_PAYER_FIRST_NAME: read(source, 'MP_PAYER_FIRST_NAME') ?? 'APRO',
+    PUBLIC_BASE_URL: base,
+    PAIRING_NUMBER: pairing,
+    FFMPEG_PATH: read(source, 'FFMPEG_PATH'),
+  };
+}

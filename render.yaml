@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: figurinhas-bot
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: MOCK_WHATSAPP
+        value: "0"
+      - key: MOCK_MP
+        value: "0"
+      - key: MP_PAYER_FIRST_NAME
+        value: APRO
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: ADMIN_NUMBERS
+        sync: false
+      - key: LIBSQL_URL
+        sync: false
+      - key: LIBSQL_AUTH_TOKEN
+        sync: false
+      - key: MP_ACCESS_TOKEN
+        sync: false
+      - key: MP_WEBHOOK_SECRET
+        sync: false
+      - key: MP_PAYER_EMAIL
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: PAIRING_NUMBER
+        sync: false

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Client, InArgs, ResultSet, Transaction } from '@libsql/client';
+import { storedFormat, type StickerFormat } from '../bot/format.js';
 import type { PlanDraft } from '../config.js';
 import { phoneFromJid, toJid } from '../phone.js';
 import type { ApplyOutcome, CreditLot, PaymentRow, Plan, SalesBucket, UserRow } from '../types.js';
@@ -46,6 +47,12 @@ function isConstraintError(error: unknown): boolean {
   return /unique|constraint/i.test(message);
 }
 
+function bytesOf(value: unknown): Buffer {
+  if (value instanceof Uint8Array) return Buffer.from(value);
+  if (value instanceof ArrayBuffer) return Buffer.from(new Uint8Array(value));
+  throw new Error('mídia pendente ilegível');
+}
+
 function mapUser(row: Record<string, unknown>): UserRow {
   return {
     jid: str(row, 'jid'),
@@ -59,6 +66,7 @@ function mapUser(row: Record<string, unknown>): UserRow {
     isVip: flag(row, 'is_vip'),
     hasInbound: flag(row, 'has_inbound'),
     soundStickers: row.sound_stickers == null ? true : flag(row, 'sound_stickers'),
+    stickerFormat: storedFormat(row.format_mode),
     createdAt: num(row, 'created_at'),
     updatedAt: num(row, 'updated_at'),
   };
@@ -211,6 +219,71 @@ export class Database {
 
   async setSoundStickers(jid: string, enabled: boolean, now: number): Promise<void> {
     await run(this.client, 'UPDATE users SET sound_stickers = ?, updated_at = ? WHERE jid = ?', [enabled ? 1 : 0, now, jid]);
+  }
+
+  async setStickerFormat(jid: string, format: StickerFormat, now: number): Promise<void> {
+    await run(this.client, 'UPDATE users SET format_mode = ?, updated_at = ? WHERE jid = ?', [format, now, jid]);
+  }
+
+  async savePendingMedia(input: {
+    jid: string;
+    kind: 'image' | 'video';
+    mimetype: string;
+    data: Buffer;
+    now: number;
+    ttlMs: number;
+  }): Promise<void> {
+    await run(
+      this.client,
+      `INSERT INTO pending_media (jid, kind, mimetype, data, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(jid) DO UPDATE SET
+         kind = excluded.kind,
+         mimetype = excluded.mimetype,
+         data = excluded.data,
+         created_at = excluded.created_at,
+         expires_at = excluded.expires_at`,
+      [input.jid, input.kind, input.mimetype, input.data, input.now, input.now + input.ttlMs],
+    );
+  }
+
+  async peekPendingMedia(jid: string, now: number): Promise<'missing' | 'expired' | 'ready'> {
+    const found = await run(this.client, 'SELECT expires_at FROM pending_media WHERE jid = ?', [jid]);
+    if (!found.rows.length) return 'missing';
+    if (num(rowOf(found.rows[0]), 'expires_at') <= now) {
+      await run(this.client, 'DELETE FROM pending_media WHERE jid = ?', [jid]);
+      return 'expired';
+    }
+    return 'ready';
+  }
+
+  async takePendingMedia(
+    jid: string,
+    now: number,
+  ): Promise<{ status: 'missing' } | { status: 'expired' } | { status: 'ready'; media: { kind: 'image' | 'video'; mimetype: string; buffer: Buffer } }> {
+    const tx = await this.client.transaction('write');
+    try {
+      const found = await run(tx, 'SELECT kind, mimetype, data, expires_at FROM pending_media WHERE jid = ?', [jid]);
+      if (!found.rows.length) {
+        await tx.commit();
+        return { status: 'missing' };
+      }
+      const row = rowOf(found.rows[0]);
+      await run(tx, 'DELETE FROM pending_media WHERE jid = ?', [jid]);
+      await tx.commit();
+      if (num(row, 'expires_at') <= now) return { status: 'expired' };
+      const kind = str(row, 'kind') === 'video' ? 'video' : 'image';
+      return { status: 'ready', media: { kind, mimetype: str(row, 'mimetype'), buffer: bytesOf(row.data) } };
+    } catch (error) {
+      await tx.rollback().catch(() => undefined);
+      throw error;
+    } finally {
+      tx.close();
+    }
+  }
+
+  async clearPendingMedia(jid: string): Promise<void> {
+    await run(this.client, 'DELETE FROM pending_media WHERE jid = ?', [jid]);
   }
 
   async touchInbound(input: { jid: string; phone: string; pushName: string | null; now: number }): Promise<void> {

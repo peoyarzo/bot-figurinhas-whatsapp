@@ -21,6 +21,7 @@ function user(partial: Partial<UserRow> = {}): UserRow {
     isVip: false,
     hasInbound: true,
     soundStickers: true,
+    stickerFormat: 'perguntar',
     createdAt: now,
     updatedAt: now,
     ...partial,
@@ -71,6 +72,7 @@ describe('planos, saldo e datas', () => {
       expect(plans).toContain('valem 30 dias');
 
       await h.send(h.admin, `/vip ${h.user}`);
+      await h.send(h.user, '/formato recortar');
       const vip = await h.send(h.user, '', { media: { kind: 'image', mimetype: 'image/png', buffer: png } });
       expect(vip.some((item) => item.type === 'sticker')).toBe(true);
       expect((await h.runtime.db.getUser(`${h.user}@s.whatsapp.net`))?.balance).toBe(0);

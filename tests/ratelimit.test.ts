@@ -64,6 +64,7 @@ describe('limites e fila', () => {
     try {
       await h.send(h.user, 'oi');
       await h.runtime.db.grantPlan(h.user, (await h.runtime.db.getPlan('pack15'))!, h.nowBox.value);
+      await h.send(h.user, '/formato recortar');
       const png = await redPng();
       const first = await h.send(h.user, '', { media: { kind: 'image', mimetype: 'image/png', buffer: png } });
       expect(first.some((item) => item.type === 'typing')).toBe(true);

@@ -91,6 +91,14 @@ export const SCHEMA: string[] = [
     created_at INTEGER NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_credit_lots_jid ON credit_lots (jid, expires_at)`,
+  `CREATE TABLE IF NOT EXISTS pending_media (
+    jid TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    mimetype TEXT NOT NULL,
+    data BLOB NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+  )`,
 ];
 
 export async function migrate(client: Client): Promise<void> {
@@ -115,6 +123,12 @@ export async function migrate(client: Client): Promise<void> {
     'ALTER TABLE payments ADD COLUMN credits_expire_days_snapshot INTEGER',
   );
   await ensureColumn(client, 'users', 'sound_stickers', 'ALTER TABLE users ADD COLUMN sound_stickers INTEGER NOT NULL DEFAULT 1');
+  await ensureColumn(
+    client,
+    'users',
+    'format_mode',
+    "ALTER TABLE users ADD COLUMN format_mode TEXT NOT NULL DEFAULT 'perguntar'",
+  );
 }
 
 async function ensureColumn(client: Client, table: string, column: string, sql: string): Promise<void> {

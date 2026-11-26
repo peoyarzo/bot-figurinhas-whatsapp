@@ -2,6 +2,7 @@ import type { AppContext } from '../context.js';
 import { parseBrl, formatBrl } from '../money.js';
 import { normalizePhone } from '../phone.js';
 import { resolvePlanId } from '../plans.js';
+import { parseFormatCommand } from './format.js';
 import { loadConfig } from '../config.js';
 import { buildStatusModel, renderStatusCard } from '../stickers/status-card.js';
 import { zonedStartOfDay, zonedStartOfMonth, zonedStartOfWeek } from '../time.js';
@@ -10,6 +11,8 @@ import { startCheckout } from '../payments/flow.js';
 import {
   adminOnlyText,
   menuText,
+  formatSavedText,
+  formatUsageText,
   pausedText,
   plansText,
   resumedText,
@@ -63,6 +66,10 @@ export async function dispatchCommand(ctx: AppContext, msg: InboundMessage, comm
     await setSoundPreference(ctx, msg, command.args[0]);
     return;
   }
+  if (name === 'formato') {
+    await setFormatPreference(ctx, msg, command.args[0]);
+    return;
+  }
   if (!isAdmin) {
     if (['vendas', 'liberar', 'vip', 'unvip', 'pausar', 'retomar'].includes(name)) {
       await ctx.messenger.sendText(msg.jid, adminOnlyText());
@@ -98,6 +105,18 @@ export async function dispatchCommand(ctx: AppContext, msg: InboundMessage, comm
     return;
   }
   await ctx.messenger.sendText(msg.jid, unknownCommandText());
+}
+
+async function setFormatPreference(ctx: AppContext, msg: InboundMessage, raw: string | undefined): Promise<void> {
+  const format = parseFormatCommand(raw);
+  const user = await ctx.db.getUser(msg.jid);
+  if (!user) return;
+  if (!format) {
+    await ctx.messenger.sendText(msg.jid, formatUsageText(user.stickerFormat));
+    return;
+  }
+  await ctx.db.setStickerFormat(msg.jid, format, ctx.now());
+  await ctx.messenger.sendText(msg.jid, formatSavedText(format));
 }
 
 async function setSoundPreference(ctx: AppContext, msg: InboundMessage, raw: string | undefined): Promise<void> {

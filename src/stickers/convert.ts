@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
+import type { StickerFit } from '../bot/format.js';
 import type { AppConfig } from '../config.js';
 import { attachStickerExif, type StickerMeta } from './exif.js';
 
@@ -17,6 +18,11 @@ export type StickerOptions = StickerMeta & {
   maxAnimatedBytes: number;
   maxAnimatedSeconds: number;
   ffmpegPath?: string;
+  /**
+   * cover recorta no centro. fill estica. contain é o encaixe antigo
+   * (cabe inteiro, com borda) e só entra se ninguém passou o formato.
+   */
+  fit?: StickerFit;
 };
 
 export type ConvertResult = { ok: true; buffer: Buffer; animated: boolean } | { ok: false; reason: string };
@@ -72,8 +78,14 @@ function bundledFfmpeg(): string | undefined {
   }
 }
 
-export function stickerOptionsFromConfig(config: AppConfig, ffmpegPath?: string): StickerOptions {
-  return { ...config.sticker, ffmpegPath };
+export function stickerOptionsFromConfig(config: AppConfig, ffmpegPath?: string, fit: StickerFit = 'contain'): StickerOptions {
+  return { ...config.sticker, ffmpegPath, fit };
+}
+
+export function animationVideoFilter(fit: StickerFit, fps: number): string {
+  if (fit === 'fill') return `fps=${fps},scale=512:512:flags=lanczos,format=rgba`;
+  if (fit === 'cover') return `fps=${fps},scale=512:512:force_original_aspect_ratio=increase:flags=lanczos,crop=512:512,format=rgba`;
+  return `fps=${fps},scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba`;
 }
 
 export async function mediaToSticker(input: Buffer, mimetype: string, opts: StickerOptions): Promise<ConvertResult> {
@@ -96,7 +108,7 @@ export async function imageToSticker(input: Buffer, opts: StickerOptions): Promi
     try {
       const encoded = await sharp(input, { animated: false, limitInputPixels: 20_000_000, failOn: 'none' })
         .rotate()
-        .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .resize(512, 512, resizeOptions(opts.fit ?? 'contain'))
         .ensureAlpha()
         .webp({ quality, alphaQuality: quality, effort: 5 })
         .toBuffer();
@@ -124,12 +136,12 @@ export async function videoToSticker(input: Buffer, opts: StickerOptions): Promi
     let codec: 'libwebp_anim' | 'libwebp' = 'libwebp_anim';
     for (const attempt of ANIMATED_ATTEMPTS) {
       try {
-        await encodeAnimation(ffmpeg, source, target, attempt, opts.maxAnimatedSeconds, codec);
+        await encodeAnimation(ffmpeg, source, target, attempt, opts.maxAnimatedSeconds, codec, opts.fit ?? 'contain');
       } catch {
         if (codec === 'libwebp_anim') {
           codec = 'libwebp';
           try {
-            await encodeAnimation(ffmpeg, source, target, attempt, opts.maxAnimatedSeconds, codec);
+            await encodeAnimation(ffmpeg, source, target, attempt, opts.maxAnimatedSeconds, codec, opts.fit ?? 'contain');
           } catch {
             return { ok: false, reason: 'Não consegui converter esse vídeo. Tente um clipe mais curto.' };
           }
@@ -147,6 +159,12 @@ export async function videoToSticker(input: Buffer, opts: StickerOptions): Promi
   }
 }
 
+function resizeOptions(fit: StickerFit): sharp.ResizeOptions {
+  if (fit === 'fill') return { fit: 'fill' };
+  if (fit === 'cover') return { fit: 'cover', position: 'centre' };
+  return { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } };
+}
+
 async function encodeAnimation(
   ffmpeg: string,
   source: string,
@@ -154,8 +172,9 @@ async function encodeAnimation(
   attempt: { quality: number; fps: number },
   seconds: number,
   codec: 'libwebp_anim' | 'libwebp',
+  fit: StickerFit,
 ): Promise<void> {
-  const filter = `fps=${attempt.fps},scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba`;
+  const filter = animationVideoFilter(fit, attempt.fps);
   await execFileAsync(
     ffmpeg,
     ['-y', '-hide_banner', '-loglevel', 'error', '-t', String(seconds), '-i', source, '-an', '-vf', filter, '-c:v', codec, '-quality', String(attempt.quality), '-loop', '0', target],

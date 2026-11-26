@@ -15,6 +15,9 @@ export function menuText(isAdmin: boolean): string {
     '/status — cartão com saldo e validade',
     '/som on — figurinha com som quando houver áudio',
     '/som off — figurinha muda',
+    '/formato perguntar — pergunto como encaixar (padrão)',
+    '/formato recortar — corto no quadrado, sem distorcer',
+    '/formato esticar — estico até ocupar tudo',
     '',
     'Não há figurinha grátis. Sem saldo, eu mando os planos.',
   ];
@@ -147,6 +150,35 @@ export function soundUsageText(enabled: boolean): string {
 
 export function soundServerOffText(enabled: boolean): string {
   return `Preferência salva: som ${enabled ? 'ligado' : 'desligado'}. Neste servidor SOUND_STICKERS está desligado, então a figurinha sai muda.`;
+}
+
+export function formatQuestionText(): string {
+  return [
+    'Como encaixar no quadrado?',
+    '',
+    '1 - Recortar (quadrado, sem distorcer)',
+    '2 - Esticar (ocupa tudo)',
+    '',
+    'Dica: /formato recortar ou /formato esticar guarda a escolha e eu não pergunto de novo. /formato perguntar volta a perguntar.',
+  ].join('\n');
+}
+
+export function formatExpiredText(): string {
+  return 'O tempo dessa mídia acabou (5 minutos). Manda de novo.';
+}
+
+export function formatMissingText(): string {
+  return 'Não tenho uma imagem esperando. Manda a foto, o GIF ou o vídeo de novo.';
+}
+
+export function formatSavedText(format: 'perguntar' | 'recortar' | 'esticar'): string {
+  if (format === 'recortar') return 'Formato salvo: recortar. Vou cortar no quadrado, sem distorcer, sem perguntar.';
+  if (format === 'esticar') return 'Formato salvo: esticar. Vou esticar até ocupar o quadrado, sem perguntar.';
+  return 'Formato salvo: perguntar. Vou perguntar como encaixar cada figurinha.';
+}
+
+export function formatUsageText(format: 'perguntar' | 'recortar' | 'esticar'): string {
+  return `Formato atual: ${format}.\n/formato perguntar\n/formato recortar\n/formato esticar`;
 }
 
 export function statusCaption(model: StatusModel): string {

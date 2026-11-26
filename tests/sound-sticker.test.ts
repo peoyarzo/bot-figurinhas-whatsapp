@@ -182,6 +182,7 @@ describe('preferência /som e um crédito', () => {
       const plan = await h.runtime.db.getPlan('pack15');
       if (!plan) throw new Error('plano');
       await h.runtime.db.grantPlan(h.user, plan, h.nowBox.value);
+      await h.send(h.user, '/formato recortar');
       const video = await clip(true);
       const sent = await h.send(h.user, '', { media: { kind: 'video', mimetype: 'video/mp4', buffer: video } });
       const stickers = sent.filter((item) => item.type === 'sticker');
@@ -204,6 +205,7 @@ describe('preferência /som e um crédito', () => {
       const plan = await h.runtime.db.getPlan('pack15');
       if (!plan) throw new Error('plano');
       await h.runtime.db.grantPlan(h.user, plan, h.nowBox.value);
+      await h.send(h.user, '/formato recortar');
       await h.send(h.user, '/som off');
       const withAudio = await clip(true);
       const muted = await h.send(h.user, '', { media: { kind: 'video', mimetype: 'video/mp4', buffer: withAudio } });
@@ -229,6 +231,7 @@ describe('preferência /som e um crédito', () => {
       const plan = await h.runtime.db.getPlan('pack15');
       if (!plan) throw new Error('plano');
       await h.runtime.db.grantPlan(h.user, plan, h.nowBox.value);
+      await h.send(h.user, '/formato recortar');
       const saved = textsOf(await h.send(h.user, '/som on')).join('\n');
       expect(saved).toContain('SOUND_STICKERS');
       const sent = await h.send(h.user, '', { media: { kind: 'video', mimetype: 'video/mp4', buffer: await clip(true) } });
@@ -258,6 +261,7 @@ describe('preferência /som e um crédito', () => {
     const h = await createHarness();
     try {
       await h.send(h.admin, `/vip ${h.user}`);
+      await h.send(h.user, '/formato recortar');
       const sent = await h.send(h.user, '', { media: { kind: 'image', mimetype: 'image/png', buffer: await redPng() } });
       const sticker = sent.find((item) => item.type === 'sticker');
       expect(sticker && sticker.type === 'sticker' ? sticker.audio : undefined).toBeUndefined();

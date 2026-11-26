@@ -2,7 +2,7 @@ import type { AppContext } from '../context.js';
 import { refreshPendingPayments } from '../payments/flow.js';
 import type { InboundMessage } from '../types.js';
 import { dispatchCommand, parseCommand } from './commands.js';
-import { handleMedia } from './media.js';
+import { handleFormatReply, handleMedia } from './media.js';
 import { documentText, idleText } from './texts.js';
 
 export async function handleInbound(ctx: AppContext, msg: InboundMessage): Promise<void> {
@@ -42,6 +42,7 @@ export async function handleInbound(ctx: AppContext, msg: InboundMessage): Promi
     await handleMedia(ctx, msg, isAdmin);
     return;
   }
+  if (msg.text.trim() && (await handleFormatReply(ctx, msg, isAdmin))) return;
   if (msg.text.trim() && ctx.limiter.tryTake(`hint:${msg.jid}`, ctx.config.safety.hintPerMinute)) {
     await ctx.messenger.sendText(msg.jid, idleText());
   }

@@ -88,7 +88,13 @@ export async function runPurchaseFlow(runtime: Runtime, input: { userPhone: stri
   const image = await sharp({
     create: { width: 640, height: 400, channels: 4, background: { r: 220, g: 40, b: 70, alpha: 1 } },
   }).png().toBuffer();
-  const stickerReply = await say(input.userPhone, '', input.pushName, { media: { kind: 'image', mimetype: 'image/png', buffer: image } });
+  const asked = await say(input.userPhone, '', input.pushName, { media: { kind: 'image', mimetype: 'image/png', buffer: image } });
+  const askedText = asked.filter((item) => item.type === 'text').map((item) => (item.type === 'text' ? item.text : '')).join('\n');
+  if (!askedText.includes('1 - Recortar')) throw new Error('a imagem não perguntou o encaixe');
+  if (asked.some((item) => item.type === 'sticker')) throw new Error('a figurinha saiu antes da escolha');
+  const waiting = await runtime.db.getUser(toJid(input.userPhone));
+  if (!waiting || waiting.balance !== 15) throw new Error(`saldo antes da escolha: ${waiting?.balance}`);
+  const stickerReply = await say(input.userPhone, '1', input.pushName);
   const sticker = stickerReply.find((item) => item.type === 'sticker');
   if (!sticker || sticker.type !== 'sticker') throw new Error('figurinha não foi enviada');
   const meta = await sharp(sticker.buffer).metadata();

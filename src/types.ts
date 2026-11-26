@@ -1,3 +1,4 @@
+import type { StickerFormat } from './bot/format.js';
 import type { PlanDraft, PlanKind } from './config.js';
 
 export type Plan = PlanDraft & { edited: boolean };
@@ -15,6 +16,8 @@ export type UserRow = {
   hasInbound: boolean;
   /** Padrão true: vídeo com áudio vira figurinha com som. `/som off` grava false. */
   soundStickers: boolean;
+  /** Padrão perguntar. recortar e esticar pulam a pergunta. */
+  stickerFormat: StickerFormat;
   createdAt: number;
   updatedAt: number;
 };

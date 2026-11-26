@@ -61,6 +61,7 @@ describe('comandos de admin', () => {
       const row = await h.runtime.db.getUser(`${h.user}@s.whatsapp.net`);
       expect(row?.isVip).toBe(true);
       const png = await redPng();
+      await h.send(h.user, '/formato recortar');
       const sent = await h.send(h.user, '', { media: { kind: 'image', mimetype: 'image/png', buffer: png } });
       expect(sent.some((item) => item.type === 'sticker')).toBe(true);
       expect((await h.runtime.db.getUser(`${h.user}@s.whatsapp.net`))?.balance).toBe(0);
@@ -92,12 +93,14 @@ describe('comandos de admin', () => {
       const png = await redPng();
       await h.send(h.user, 'oi');
       await h.runtime.db.grantPlan(h.user, (await h.runtime.db.getPlan('pack15'))!, h.nowBox.value);
+      await h.send(h.user, '/formato recortar');
       const blocked = textsOf(await h.send(h.user, '', { media: { kind: 'image', mimetype: 'image/png', buffer: png } }));
       expect(blocked.join('\n')).toMatch(/limite de hoje/);
       expect((await h.runtime.db.getUser(`${h.user}@s.whatsapp.net`))?.balance).toBe(15);
       await h.runtime.db.grantPlan(h.admin, (await h.runtime.db.getPlan('pack15'))!, h.nowBox.value);
       const before = (await h.runtime.db.getUser(`${h.admin}@s.whatsapp.net`))?.balance;
       await h.send(h.admin, 'oi');
+      await h.send(h.admin, '/formato recortar');
       const sent = await h.send(h.admin, '', { media: { kind: 'image', mimetype: 'image/png', buffer: png } });
       expect(sent.some((item) => item.type === 'sticker')).toBe(true);
       expect((await h.runtime.db.getUser(`${h.admin}@s.whatsapp.net`))?.balance).toBe(before);

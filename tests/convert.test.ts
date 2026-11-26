@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
-import { imageToSticker, mediaToSticker, resolveFfmpegPath, stickerOptionsFromConfig } from '../src/stickers/convert.js';
+import { animationVideoFilter, imageToSticker, mediaToSticker, resolveFfmpegPath, stickerOptionsFromConfig } from '../src/stickers/convert.js';
 import { readStickerExif } from '../src/stickers/exif.js';
 
 const execFileAsync = promisify(execFile);
@@ -35,6 +35,25 @@ describe('conversão de figurinha', () => {
     expect(readStickerExif(result.buffer)?.author).toBe(opts.author);
   });
 
+  it('recorta no centro e estica sem faixa transparente', async () => {
+    const input = await widePng();
+    const opts = stickerOptionsFromConfig(loadConfig());
+    const cropped = await imageToSticker(input, { ...opts, fit: 'cover' });
+    const stretched = await imageToSticker(input, { ...opts, fit: 'fill' });
+    expect(cropped.ok && stretched.ok).toBe(true);
+    if (!cropped.ok || !stretched.ok) return;
+    const cropCorner = await pixel(cropped.buffer, 0, 0);
+    const cropCenter = await pixel(cropped.buffer, 256, 256);
+    const fillCorner = await pixel(stretched.buffer, 0, 0);
+    const fillCenter = await pixel(stretched.buffer, 256, 256);
+    expect(cropCorner.a).toBe(255);
+    expect(cropCorner.b).toBeGreaterThan(cropCorner.g);
+    expect(cropCenter.b).toBeGreaterThan(cropCenter.g);
+    expect(fillCorner.a).toBe(255);
+    expect(fillCorner.g).toBeGreaterThan(fillCorner.b);
+    expect(fillCenter.b).toBeGreaterThan(fillCenter.g);
+  });
+
   it('recusa estática que não cabe no limite', async () => {
     const input = await sharp({
       create: { width: 400, height: 400, channels: 3, background: { r: 10, g: 180, b: 90, alpha: 1 } },
@@ -61,10 +80,36 @@ describe('conversão de figurinha', () => {
     expect(meta.pageHeight ?? meta.height).toBe(512);
     expect((meta.pages ?? 1) > 1).toBe(true);
     expect(readStickerExif(result.buffer)?.packName).toBe('Zapfig');
+    expect(animationVideoFilter('contain', 12)).toContain('pad=512:512');
+    expect(animationVideoFilter('cover', 12)).toContain('crop=512:512');
+    expect(animationVideoFilter('cover', 12)).toContain('force_original_aspect_ratio=increase');
+    expect(animationVideoFilter('fill', 12)).toBe('fps=12,scale=512:512:flags=lanczos,format=rgba');
     const refused = await mediaToSticker(video, 'video/mp4', { ...opts, maxAnimatedBytes: 80 });
     expect(refused.ok).toBe(false);
   }, 60_000);
 });
+
+async function widePng(): Promise<Buffer> {
+  const width = 800;
+  const height = 200;
+  const raw = Buffer.alloc(width * height * 3);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const blue = x >= 300 && x < 500;
+      const index = (y * width + x) * 3;
+      raw[index] = 0;
+      raw[index + 1] = blue ? 0 : 180;
+      raw[index + 2] = blue ? 220 : 40;
+    }
+  }
+  return sharp(raw, { raw: { width, height, channels: 3 } }).png().toBuffer();
+}
+
+async function pixel(buffer: Buffer, x: number, y: number): Promise<{ r: number; g: number; b: number; a: number }> {
+  const { data, info } = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const index = (y * info.width + x) * info.channels;
+  return { r: data[index] ?? 0, g: data[index + 1] ?? 0, b: data[index + 2] ?? 0, a: data[index + 3] ?? 0 };
+}
 
 async function tinyVideo(): Promise<Buffer> {
   const dir = await mkdtemp(path.join(tmpdir(), 'figbot-src-'));

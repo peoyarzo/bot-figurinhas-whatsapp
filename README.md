@@ -65,7 +65,7 @@ O `.env.example` já liga os dois mocks. `npm run demo` simula, sem WhatsApp e s
 2. `/comprar 15` devolve um Pix falso
 3. o pagamento é aprovado como o sandbox faria com o pagador de teste **APRO**
 4. o webhook assinado libera o pacote; o segundo webhook **não** soma de novo
-5. uma imagem vira figurinha webp 512×512 e o saldo vai de 15 para 14. O pacote de 15 fica com validade de 30 dias; não há figurinha grátis
+5. uma imagem pergunta como encaixar. O saldo continua 15. A resposta `1` vira figurinha webp 512×512 e o saldo vai para 14. O pacote de 15 fica com validade de 30 dias; não há figurinha grátis
 6. `/status` manda o cartão e `/vendas` mostra R$ 3,50
 
 Na demo o atraso aleatório da fila fica em zero para ela terminar na hora. Em produção o intervalo está em `safety.jitterMinMs` / `jitterMaxMs`.
@@ -197,6 +197,10 @@ Quem usa o bot:
 - `/status` ou `/saldo` — cartão (nome, plano, saldo ou validade, figurinhas usadas)
 - `/som on` — padrão. Vídeo ou GIF com áudio vira figurinha com som
 - `/som off` — a figurinha sai muda. A escolha fica no usuário
+- `/formato perguntar` — padrão. O bot pergunta como encaixar
+- `/formato recortar` — corta no quadrado, sem distorcer, sem perguntar
+- `/formato esticar` — estica até ocupar o quadrado, sem perguntar
+- `/ajuda` — o mesmo que `/menu`
 
 Admin (o número tem que estar em `ADMIN_NUMBERS`):
 
@@ -226,9 +230,11 @@ Nada disso torna o cliente oficial. Continua sendo WhatsApp Web não oficial. Ve
 
 ## Figurinha e ffmpeg
 
-- Imagem: `sharp`, 512×512, `contain`, fundo transparente, webp. Tenta qualidades até caber em ~100 KB. Se não cabe, recusa.
+- Imagem: `sharp`, 512×512, webp. Tenta qualidades até caber em ~100 KB. Se não cabe, recusa.
 - GIF e vídeo: `ffmpeg`, corta em 6 segundos, 512×512, webp animado, até ~500 KB, com quedas de qualidade e de fps. Se não cabe, recusa.
-- O EXIF de pacote (`sticker-pack-name`, `sticker-pack-publisher`, id e emoji) sai de `config.sticker`.
+- Encaixe: o padrão é perguntar. `1` ou `recortar` corta no centro (`cover` no sharp, `scale` + `crop` no ffmpeg). `2` ou `esticar` estica (`fill`, `scale=512:512`). A mídia fica no banco por 5 minutos, uma por pessoa; mídia nova substitui a anterior. O crédito só sai quando a figurinha é gerada. Se os 5 minutos passam, o bot avisa e não gera. O encaixe antigo (caber inteiro, com borda transparente) continua no conversor, mas o chat não oferece.
+- `/formato recortar` e `/formato esticar` guardam a escolha e pulam a pergunta. `/formato perguntar` volta a perguntar. `/ajuda` lista isso.
+- O EXIF de pacote (`sticker-pack-name`, `sticker-pack-publisher`, id e emoji) sai de `config.sticker`. O pacote se chama Zapfig.
 
 O `ffmpeg-static` usado aqui inclui `libwebp`, `libwebp_anim` e `libopus`, então o `npm install` no Render já traz o binário certo para o Linux do build. Se um dia esse binário não tiver o encoder, `npm run fetch-ffmpeg` baixa um ffmpeg estático público para `bin/ffmpeg` (sem conta e sem cartão) e o boot prefere esse arquivo. Dá para apontar `FFMPEG_PATH` para qualquer binário com `libwebp`.
 
@@ -248,7 +254,7 @@ npm run lint
 npm run demo
 ```
 
-Vitest cobre conversão (tamanho, transparência, EXIF, recusa), planos e saldo, comandos de admin, rate limit, fila, aquecimento, webhook idempotente, auth state no libSQL em arquivo e a demo de ponta a ponta. O auth state de teste usa `file:` no diretório temporário, o mesmo cliente do Turso.
+Vitest cobre conversão (tamanho, transparência, recorte, estique, EXIF, recusa), a escolha de formato, a preferência, o prazo de 5 minutos, planos e saldo, comandos de admin, rate limit, fila, aquecimento, webhook idempotente, auth state no libSQL em arquivo e a demo de ponta a ponta. O auth state de teste usa `file:` no diretório temporário, o mesmo cliente do Turso.
 
 ## Limites e riscos
 

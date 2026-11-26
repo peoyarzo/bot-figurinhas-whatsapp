@@ -83,9 +83,11 @@ export function stickerOptionsFromConfig(config: AppConfig, ffmpegPath?: string,
 }
 
 export function animationVideoFilter(fit: StickerFit, fps: number): string {
-  if (fit === 'fill') return `fps=${fps},scale=512:512:flags=lanczos,format=rgba`;
-  if (fit === 'cover') return `fps=${fps},scale=512:512:force_original_aspect_ratio=increase:flags=lanczos,crop=512:512,format=rgba`;
-  return `fps=${fps},scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba`;
+  const lead = `format=rgba,fps=${fps}`;
+  const tail = 'format=yuva420p';
+  if (fit === 'fill') return `${lead},scale=512:512:flags=lanczos,${tail}`;
+  if (fit === 'cover') return `${lead},scale=512:512:force_original_aspect_ratio=increase:flags=lanczos,crop=512:512,${tail}`;
+  return `${lead},scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000,${tail}`;
 }
 
 export async function mediaToSticker(input: Buffer, mimetype: string, opts: StickerOptions): Promise<ConvertResult> {
@@ -107,10 +109,11 @@ export async function imageToSticker(input: Buffer, opts: StickerOptions): Promi
   for (const quality of STATIC_QUALITIES) {
     try {
       const encoded = await sharp(input, { animated: false, limitInputPixels: 20_000_000, failOn: 'none' })
+        // JPEG não tem alfa. Sem este canal, o sharp ignora o alpha do background e a sobra sai opaca.
+        .ensureAlpha()
         .rotate()
         .resize(512, 512, resizeOptions(opts.fit ?? 'contain'))
-        .ensureAlpha()
-        .webp({ quality, alphaQuality: quality, effort: 5 })
+        .webp({ quality, alphaQuality: 100, effort: 5 })
         .toBuffer();
       const withExif = attachStickerExif(encoded, opts);
       if (withExif.length <= opts.maxStaticBytes) return { ok: true, buffer: withExif, animated: false };
@@ -177,7 +180,7 @@ async function encodeAnimation(
   const filter = animationVideoFilter(fit, attempt.fps);
   await execFileAsync(
     ffmpeg,
-    ['-y', '-hide_banner', '-loglevel', 'error', '-t', String(seconds), '-i', source, '-an', '-vf', filter, '-c:v', codec, '-quality', String(attempt.quality), '-loop', '0', target],
+    ['-y', '-hide_banner', '-loglevel', 'error', '-t', String(seconds), '-i', source, '-an', '-vf', filter, '-c:v', codec, '-pix_fmt', 'yuva420p', '-quality', String(attempt.quality), '-loop', '0', target],
     { timeout: 25_000, maxBuffer: 2_000_000 },
   );
 }

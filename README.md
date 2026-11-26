@@ -232,7 +232,7 @@ Nada disso torna o cliente oficial. Continua sendo WhatsApp Web não oficial. Ve
 
 - Imagem: `sharp`, 512×512, webp. Tenta qualidades até caber em ~100 KB. Se não cabe, recusa.
 - GIF e vídeo: `ffmpeg`, corta em 6 segundos, 512×512, webp animado, até ~500 KB, com quedas de qualidade e de fps. Se não cabe, recusa.
-- Encaixe: o padrão é perguntar. `1` ou `recortar` corta no centro (`cover` no sharp, `scale` + `crop` no ffmpeg). `2` ou `esticar` estica (`fill`, `scale=512:512`). A mídia fica no banco por 5 minutos, uma por pessoa; mídia nova substitui a anterior. O crédito só sai quando a figurinha é gerada. Se os 5 minutos passam, o bot avisa e não gera. O encaixe antigo (caber inteiro, com borda transparente) continua no conversor, mas o chat não oferece.
+- Encaixe: o padrão é perguntar. `1` ou `recortar` corta no centro (`cover` no sharp, `scale` + `crop` no ffmpeg). `2` ou `esticar` estica (`fill`, `scale=512:512`). Nenhum dos dois coloca faixa. Se o encaixe antigo (`contain`) for usado, a sobra é `rgba(0,0,0,0)`, nunca branco. A mídia fica no banco por 5 minutos, uma por pessoa; mídia nova substitui a anterior. O crédito só sai quando a figurinha é gerada. Se os 5 minutos passam, o bot avisa e não gera.
 - `/formato recortar` e `/formato esticar` guardam a escolha e pulam a pergunta. `/formato perguntar` volta a perguntar. `/ajuda` lista isso.
 - O EXIF de pacote (`sticker-pack-name`, `sticker-pack-publisher`, id e emoji) sai de `config.sticker`. O pacote se chama Zapfig.
 

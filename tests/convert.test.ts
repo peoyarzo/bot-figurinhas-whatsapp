@@ -7,7 +7,7 @@ import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
 import { animationVideoFilter, imageToSticker, mediaToSticker, resolveFfmpegPath, stickerOptionsFromConfig } from '../src/stickers/convert.js';
-import { readStickerExif } from '../src/stickers/exif.js';
+import { attachStickerExif, readStickerExif } from '../src/stickers/exif.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -54,6 +54,63 @@ describe('conversão de figurinha', () => {
     expect(fillCenter.b).toBeGreaterThan(fillCenter.g);
   });
 
+  it('não pinta borda branca e guarda a transparência do PNG', async () => {
+    const opts = stickerOptionsFromConfig(loadConfig());
+    const hole = await transparentPng();
+    for (const fit of ['contain', 'cover', 'fill'] as const) {
+      const result = await imageToSticker(hole, { ...opts, fit });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const corner = await pixel(result.buffer, 0, 0);
+      expect(corner.a).toBe(0);
+      expect(opaqueWhite(corner)).toBe(false);
+      expect(await countOpaqueWhite(result.buffer)).toBe(0);
+      const center = await pixel(result.buffer, 256, 256);
+      expect(center.a).toBe(255);
+      expect(center.r).toBeGreaterThan(center.g);
+    }
+
+    const jpeg = await sharp({
+      create: { width: 800, height: 200, channels: 3, background: { r: 220, g: 30, b: 40 } },
+    })
+      .jpeg()
+      .toBuffer();
+    const padded = await imageToSticker(jpeg, { ...opts, fit: 'contain' });
+    expect(padded.ok).toBe(true);
+    if (!padded.ok) return;
+    const jpegCorner = await pixel(padded.buffer, 0, 0);
+    expect(jpegCorner.a).toBe(0);
+    expect(opaqueWhite(jpegCorner)).toBe(false);
+    expect(await countOpaqueWhite(padded.buffer)).toBe(0);
+
+    const beforeExif = await sharp(hole).ensureAlpha().resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).webp({ alphaQuality: 100 }).toBuffer();
+    const afterExif = attachStickerExif(beforeExif, opts);
+    expect(await rawPixels(beforeExif)).toEqual(await rawPixels(afterExif));
+    expect((await pixel(afterExif, 0, 0)).a).toBe(0);
+  });
+
+  it('vídeo e GIF não ganham borda branca em nenhum encaixe', async () => {
+    const opts = stickerOptionsFromConfig(loadConfig());
+    const video = await wideVideo();
+    for (const fit of ['contain', 'cover', 'fill'] as const) {
+      const result = await mediaToSticker(video, 'video/mp4', { ...opts, fit });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.animated).toBe(true);
+      expect(await countOpaqueWhite(result.buffer)).toBe(0);
+      const corner = await pixel(result.buffer, 0, 0);
+      if (fit === 'contain') expect(corner.a).toBe(0);
+      else expect(opaqueWhite(corner)).toBe(false);
+    }
+    const gif = await transparentGif();
+    const fromGif = await mediaToSticker(gif, 'image/gif', { ...opts, fit: 'contain' });
+    expect(fromGif.ok).toBe(true);
+    if (!fromGif.ok) return;
+    const gifCorner = await pixel(fromGif.buffer, 0, 0);
+    expect(gifCorner.a).toBe(0);
+    expect(await countOpaqueWhite(fromGif.buffer)).toBe(0);
+  }, 60_000);
+
   it('recusa estática que não cabe no limite', async () => {
     const input = await sharp({
       create: { width: 400, height: 400, channels: 3, background: { r: 10, g: 180, b: 90, alpha: 1 } },
@@ -80,10 +137,15 @@ describe('conversão de figurinha', () => {
     expect(meta.pageHeight ?? meta.height).toBe(512);
     expect((meta.pages ?? 1) > 1).toBe(true);
     expect(readStickerExif(result.buffer)?.packName).toBe('Zapfig');
-    expect(animationVideoFilter('contain', 12)).toContain('pad=512:512');
+    expect(animationVideoFilter('contain', 12)).toContain('pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000');
+    expect(animationVideoFilter('contain', 12)).not.toMatch(/white|black@/i);
     expect(animationVideoFilter('cover', 12)).toContain('crop=512:512');
     expect(animationVideoFilter('cover', 12)).toContain('force_original_aspect_ratio=increase');
-    expect(animationVideoFilter('fill', 12)).toBe('fps=12,scale=512:512:flags=lanczos,format=rgba');
+    expect(animationVideoFilter('fill', 12)).toBe('format=rgba,fps=12,scale=512:512:flags=lanczos,format=yuva420p');
+    for (const fit of ['contain', 'cover', 'fill'] as const) {
+      expect(animationVideoFilter(fit, 8).startsWith('format=rgba')).toBe(true);
+      expect(animationVideoFilter(fit, 8).endsWith('format=yuva420p')).toBe(true);
+    }
     const refused = await mediaToSticker(video, 'video/mp4', { ...opts, maxAnimatedBytes: 80 });
     expect(refused.ok).toBe(false);
   }, 60_000);
@@ -103,6 +165,97 @@ async function widePng(): Promise<Buffer> {
     }
   }
   return sharp(raw, { raw: { width, height, channels: 3 } }).png().toBuffer();
+}
+
+function opaqueWhite(pixelValue: { r: number; g: number; b: number; a: number }): boolean {
+  return pixelValue.a > 200 && pixelValue.r > 240 && pixelValue.g > 240 && pixelValue.b > 240;
+}
+
+async function countOpaqueWhite(buffer: Buffer): Promise<number> {
+  const { data, info } = await sharp(buffer, { animated: true }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  let count = 0;
+  for (let index = 0; index < data.length; index += info.channels) {
+    const sample = { r: data[index] ?? 0, g: data[index + 1] ?? 0, b: data[index + 2] ?? 0, a: data[index + 3] ?? 0 };
+    if (opaqueWhite(sample)) count += 1;
+  }
+  return count;
+}
+
+async function rawPixels(buffer: Buffer): Promise<Buffer> {
+  const { data } = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  return Buffer.from(data);
+}
+
+async function transparentPng(): Promise<Buffer> {
+  const dot = await sharp({
+    create: { width: 40, height: 40, channels: 4, background: { r: 220, g: 30, b: 40, alpha: 1 } },
+  })
+    .png()
+    .toBuffer();
+  return sharp({
+    create: { width: 200, height: 200, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  })
+    .composite([{ input: dot, left: 80, top: 80 }])
+    .png()
+    .toBuffer();
+}
+
+async function wideVideo(): Promise<Buffer> {
+  const dir = await mkdtemp(path.join(tmpdir(), 'figbot-wide-'));
+  try {
+    const out = path.join(dir, 'wide.mp4');
+    const ffmpeg = await resolveFfmpegPath();
+    await execFileAsync(ffmpeg, [
+      '-y',
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-f',
+      'lavfi',
+      '-i',
+      'color=c=red:s=96x32:d=0.5',
+      '-c:v',
+      'libx264',
+      '-pix_fmt',
+      'yuv420p',
+      '-movflags',
+      '+faststart',
+      out,
+    ]);
+    return await readFile(out);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+async function transparentGif(): Promise<Buffer> {
+  const dir = await mkdtemp(path.join(tmpdir(), 'figbot-gif-'));
+  try {
+    const png = path.join(dir, 'frame.png');
+    const gif = path.join(dir, 'clip.gif');
+    await sharp(await transparentPng()).resize(64, 64).png().toFile(png);
+    const ffmpeg = await resolveFfmpegPath();
+    await execFileAsync(ffmpeg, [
+      '-y',
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-loop',
+      '1',
+      '-t',
+      '0.5',
+      '-i',
+      png,
+      '-filter_complex',
+      '[0:v]fps=8,format=rgba,split[s0][s1];[s0]palettegen=reserve_transparent=1[p];[s1][p]paletteuse=alpha_threshold=128',
+      '-gifflags',
+      '-offsetting',
+      gif,
+    ]);
+    return await readFile(gif);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 async function pixel(buffer: Buffer, x: number, y: number): Promise<{ r: number; g: number; b: number; a: number }> {

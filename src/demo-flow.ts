@@ -13,7 +13,6 @@ import type { InboundMessage } from './types.js';
 export type DemoReport = {
   transcript: string;
   balance: number;
-  trial: number;
   stickerBytes: number;
   cardBytes: number;
   webhookStatuses: number[];
@@ -98,7 +97,13 @@ export async function runPurchaseFlow(runtime: Runtime, input: { userPhone: stri
   if (exif?.packName !== runtime.config.sticker.packName) throw new Error('EXIF sem o nome do pacote');
   const user = await runtime.db.getUser(toJid(input.userPhone));
   if (!user || user.balance !== 14) throw new Error(`saldo depois da figurinha: ${user?.balance}`);
-  if (user.trialRemaining !== runtime.config.trial.freeStickers) throw new Error('o teste grátis foi consumido no lugar do pacote');
+  if (user.trialRemaining !== 0) throw new Error('não há mais figurinha grátis');
+  const lots = await runtime.db.listCreditLots(toJid(input.userPhone), Date.now());
+  const lot = lots[0];
+  const day = 86_400_000;
+  if (!lot || lots.length !== 1 || lot.remaining !== 14 || lot.expiresAt == null) throw new Error('o pacote de 15 não virou um lote com validade');
+  const left = lot.expiresAt - Date.now();
+  if (left < 29 * day || left > 30 * day) throw new Error(`o pacote de 15 deveria vencer em 30 dias, faltam ${left} ms`);
 
   const statusReply = await say(input.userPhone, '/status', input.pushName);
   const card = statusReply.find((item) => item.type === 'image');
@@ -111,7 +116,6 @@ export async function runPurchaseFlow(runtime: Runtime, input: { userPhone: stri
   return {
     transcript: lines.join('\n'),
     balance: user.balance,
-    trial: user.trialRemaining,
     stickerBytes: sticker.buffer.length,
     cardBytes: card.buffer.length,
     webhookStatuses: statuses,

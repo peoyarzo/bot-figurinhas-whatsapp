@@ -31,7 +31,7 @@ export function parseCommand(text: string): Command | null {
 export async function dispatchCommand(ctx: AppContext, msg: InboundMessage, command: Command, isAdmin: boolean): Promise<void> {
   const name = command.name === 'saldo' ? 'status' : command.name === 'ajuda' ? 'menu' : command.name;
   if (name === 'menu') {
-    await ctx.messenger.sendText(msg.jid, menuText(ctx.config.trial.freeStickers, isAdmin));
+    await ctx.messenger.sendText(msg.jid, menuText(isAdmin));
     return;
   }
   if (name === 'planos') {
@@ -93,9 +93,13 @@ export async function dispatchCommand(ctx: AppContext, msg: InboundMessage, comm
 }
 
 async function sendStatus(ctx: AppContext, msg: InboundMessage, isAdmin: boolean): Promise<void> {
+  await ctx.db.expireCredits(msg.jid, ctx.now());
   const user = await ctx.db.getUser(msg.jid);
   if (!user) return;
-  const plan = user.planId ? await ctx.db.getPlan(user.planId) : null;
+  const [plan, lots] = await Promise.all([
+    user.planId ? ctx.db.getPlan(user.planId) : Promise.resolve(null),
+    ctx.db.listCreditLots(msg.jid, ctx.now()),
+  ]);
   const model = buildStatusModel({
     user,
     isAdmin,
@@ -103,6 +107,7 @@ async function sendStatus(ctx: AppContext, msg: InboundMessage, isAdmin: boolean
     planName: plan?.name ?? null,
     timeZone: ctx.config.timeZone,
     brand: ctx.config.sticker.packName,
+    lots,
   });
   const caption = statusCaption(model);
   try {
@@ -182,7 +187,7 @@ async function editPlan(ctx: AppContext, jid: string, args: string[]): Promise<v
   const fieldRaw = (args[2] ?? '').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
   const value = args.slice(3).join(' ').trim();
   if (!id || !fieldRaw || !value) {
-    await ctx.messenger.sendText(jid, 'Uso: /planos set <id> preco 6,90');
+    await ctx.messenger.sendText(jid, 'Uso: /planos set <id> preco 7,90');
     return;
   }
   const current = await ctx.db.getPlan(id);

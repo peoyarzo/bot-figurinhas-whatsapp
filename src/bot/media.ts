@@ -4,7 +4,7 @@ import type { InboundMessage } from '../types.js';
 import { mediaToSticker, stickerOptionsFromConfig } from '../stickers/convert.js';
 import { dailyLimitFor } from '../safety/warmup.js';
 import { resolveEntitlement } from './entitlement.js';
-import { globalLimitText, noBalanceText, queueFullText, rateLimitText, tooBigText, warmupText } from './texts.js';
+import { globalLimitText, plansText, queueFullText, rateLimitText, tooBigText, warmupText } from './texts.js';
 
 export async function handleMedia(ctx: AppContext, msg: InboundMessage, isAdmin: boolean): Promise<void> {
   if (!msg.media) return;
@@ -12,7 +12,7 @@ export async function handleMedia(ctx: AppContext, msg: InboundMessage, isAdmin:
   if (!user) return;
   const entitlement = resolveEntitlement(user, { isAdmin, now: ctx.now() });
   if (!entitlement.ok) {
-    if (ctx.limiter.tryTake(`nobalance:${msg.jid}`, 1)) await ctx.messenger.sendText(msg.jid, noBalanceText());
+    await sendPlans(ctx, msg.jid, isAdmin);
     return;
   }
   if (msg.media.buffer.length > ctx.config.safety.maxInputBytes) {
@@ -48,16 +48,15 @@ export async function handleMedia(ctx: AppContext, msg: InboundMessage, isAdmin:
     return;
   }
 
-  let reserved: 'balance' | 'trial' | null = null;
-  if (entitlement.source === 'credits' || entitlement.source === 'trial') {
-    const bucket = entitlement.source === 'credits' ? 'balance' : 'trial';
-    const took = await ctx.db.tryConsumeCredit(msg.jid, bucket, ctx.now());
-    if (!took) {
+  let reserved: { lotId: string | null } | null = null;
+  if (entitlement.source === 'credits') {
+    const taken = await ctx.db.tryConsumeCredit(msg.jid, ctx.now());
+    if (!taken.ok) {
       if (countedDaily) await ctx.db.decrementDaily(day);
-      await ctx.messenger.sendText(msg.jid, noBalanceText());
+      await sendPlans(ctx, msg.jid, isAdmin);
       return;
     }
-    reserved = bucket;
+    reserved = { lotId: taken.lotId };
   }
 
   const release = async () => {
@@ -66,9 +65,9 @@ export async function handleMedia(ctx: AppContext, msg: InboundMessage, isAdmin:
       await ctx.db.decrementDaily(day);
     }
     if (reserved) {
-      const bucket = reserved;
+      const lotId = reserved.lotId;
       reserved = null;
-      await ctx.db.refundCredit(msg.jid, bucket, ctx.now());
+      await ctx.db.refundCredit(msg.jid, lotId, ctx.now());
     }
   };
 
@@ -89,4 +88,10 @@ export async function handleMedia(ctx: AppContext, msg: InboundMessage, isAdmin:
       await ctx.messenger.sendText(msg.jid, 'Não consegui converter essa mídia.');
     }
   });
+}
+
+async function sendPlans(ctx: AppContext, jid: string, isAdmin: boolean): Promise<void> {
+  if (!ctx.limiter.tryTake(`nobalance:${jid}`, 1)) return;
+  const plans = await ctx.db.listPlans();
+  await ctx.messenger.sendText(jid, plansText(plans, isAdmin));
 }

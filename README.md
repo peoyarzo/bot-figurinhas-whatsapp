@@ -63,7 +63,7 @@ O `.env.example` já liga os dois mocks. `npm run demo` simula, sem WhatsApp e s
 2. `/comprar 15` devolve um Pix falso
 3. o pagamento é aprovado como o sandbox faria com o pagador de teste **APRO**
 4. o webhook assinado libera o pacote; o segundo webhook **não** soma de novo
-5. uma imagem vira figurinha webp 512×512 e o saldo vai de 15 para 14 (o teste grátis fica guardado)
+5. uma imagem vira figurinha webp 512×512 e o saldo vai de 15 para 14. O pacote de 15 fica com validade de 30 dias; não há figurinha grátis
 6. `/status` manda o cartão e `/vendas` mostra R$ 3,50
 
 Na demo o atraso aleatório da fila fica em zero para ela terminar na hora. Em produção o intervalo está em `safety.jitterMinMs` / `jitterMaxMs`.
@@ -166,21 +166,23 @@ Estão todas no `.env.example`.
 
 ## Planos e texto
 
-Preço, teste, limites e o EXIF da figurinha ficam em `src/config.ts`. As frases ficam em `src/bot/texts.ts`.
+Preço, validade, limites e o EXIF da figurinha ficam em `src/config.ts`. As frases ficam em `src/bot/texts.ts`.
 
 | Id | O que é | Preço no config |
 | --- | --- | --- |
-| `pack15` | 15 figurinhas | R$ 3,50 |
-| `pack25` | 25 figurinhas | R$ 6,50 |
-| `weekly` | 7 dias sem limite | R$ 4,90 |
-| `days30` | 30 dias sem limite | R$ 6,90 |
-| `months3` | 90 dias sem limite | R$ 17,90 |
+| `pack15` | 15 figurinhas, vencem 30 dias depois da compra | R$ 3,50 |
+| `pack25` | 25 figurinhas, não vencem | R$ 5,50 |
+| `weekly` | 7 dias sem limite | R$ 7,90 |
+| `days30` | 30 dias sem limite | R$ 14,90 |
+| `months3` | 90 dias sem limite | R$ 19,90 |
 
-O semanal custa R$ 4,90 e está à venda (`/comprar semanal`). `trial.freeStickers` é **1**. `0` desliga. O teste entra só na primeira conversa. Se a pessoa tem pacote pago, o bot gasta o pacote antes do teste.
+Não há teste grátis. Quem não é admin nem VIP e está sem saldo recebe a lista de `/planos` no lugar da figurinha. Admin (`ADMIN_NUMBERS`) e a lista `/vip` continuam com figurinhas ilimitadas, sem descontar saldo.
+
+Cada compra de créditos vira um lote com `expires_at`. No pacote de 15, `creditsExpireDays` é 30: o que não foi usado some 30 dias depois da compra. No de 25, `creditsExpireDays` é nulo e o lote não vence. Se a pessoa tem os dois, o bot gasta primeiro o lote que vence antes. `/status` mostra o saldo e a validade de cada lote.
 
 No boot, plano que ninguém editou pelo chat é atualizado a partir do config. Plano com `edited` (via `/planos set`) fica como o admin deixou. `/planos reset <id>` volta ao config.
 
-Quem manda a primeira mensagem ganha o teste. Admin e VIP não descontam saldo. Plano ilimitado vale até `plan_expires_at` e, se comprar de novo antes de vencer, os dias somam a partir do vencimento, não de hoje.
+Plano ilimitado vale até `plan_expires_at` e, se comprar de novo antes de vencer, os dias somam a partir do vencimento, não de hoje.
 
 ## Comandos
 
@@ -240,7 +242,7 @@ Vitest cobre conversão (tamanho, transparência, EXIF, recusa), planos e saldo,
 - **Render free dorme, reinicia e esquece o disco.** O ping de 5 minutos reduz o sono, não o restart. A sessão sobrevive porque está no Turso. Se as 750 horas acabarem, o serviço para até o mês seguinte.
 - **Cold start** leva cerca de um minuto. Nesse intervalo o UptimeRobot pode marcar uma falha curta e o WhatsApp fica desconectado até o processo voltar e reler a sessão.
 - **Ban.** Baileys não é o app oficial. O WhatsApp pode desconectar ou banir o chip mesmo com limite, jitter e sem broadcast. Use um número novo, não o seu. Não mande figurinha em massa. Se cair em `loggedOut`, pareie de novo e diminua `dailyLimitAfterWarmup` e os limites por minuto.
-- **Dinheiro.** Com token `TEST-` ninguém é cobrado. Não troque para o token de produção sem revisar o fluxo. O semanal custa R$ 4,90.
+- **Dinheiro.** Com token `TEST-` ninguém é cobrado. Não troque para o token de produção sem revisar o fluxo. O semanal custa R$ 7,90. O pacote de 25 custa R$ 5,50 e não vence; o de 15 custa R$ 3,50 e vence em 30 dias. Os ilimitados de 30 dias e de 3 meses custam R$ 14,90 e R$ 19,90.
 - **Grupos e desconhecidos.** O padrão é silêncio. Não adicione um comando de disparo: o guard existe para impedir exatamente isso.
 
 `.npmrc` tem `legacy-peer-deps=true` porque o npm 10 quebra o cálculo de peer dependencies deste conjunto (Baileys + Vitest). O `npm ci` do Render lê esse arquivo.

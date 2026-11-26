@@ -12,6 +12,8 @@ export type StatusModel = {
   brand: string;
 };
 
+export type CreditLotView = { remaining: number; expiresAt: number | null };
+
 export function buildStatusModel(input: {
   user: UserRow;
   isAdmin: boolean;
@@ -19,6 +21,7 @@ export function buildStatusModel(input: {
   planName: string | null;
   timeZone: string;
   brand: string;
+  lots?: CreditLotView[];
 }): StatusModel {
   const name = clip(input.user.pushName || input.user.phone, 22);
   const used = input.user.stickersUsed;
@@ -27,14 +30,12 @@ export function buildStatusModel(input: {
     return { name, plan: 'Admin', headline: '∞', caption: 'sem limite', detail: 'figurinhas ilimitadas', used, brand };
   }
   if (input.user.isVip) {
-    return { name, plan: 'VIP', headline: '∞', caption: 'sem limite', detail: trialNote(input.user), used, brand };
+    return { name, plan: 'VIP', headline: '∞', caption: 'sem limite', detail: 'figurinhas ilimitadas', used, brand };
   }
   const unlimited = input.user.planExpiresAt != null && input.user.planExpiresAt > input.now;
   if (unlimited && input.user.planExpiresAt) {
     const days = Math.max(1, Math.ceil((input.user.planExpiresAt - input.now) / 86_400_000));
-    const extras = [input.user.balance > 0 ? `${input.user.balance} avulsas guardadas` : '', trialNote(input.user)]
-      .filter(Boolean)
-      .join(' · ');
+    const extras = input.user.balance > 0 ? creditNote(input.lots, input.timeZone, input.user.balance) : '';
     return {
       name,
       plan: input.planName ?? 'Ilimitado',
@@ -51,18 +52,7 @@ export function buildStatusModel(input: {
       plan: 'Pacote',
       headline: String(input.user.balance),
       caption: input.user.balance === 1 ? 'figurinha restante' : 'figurinhas restantes',
-      detail: trialNote(input.user) || 'avulsas',
-      used,
-      brand,
-    };
-  }
-  if (input.user.trialRemaining > 0) {
-    return {
-      name,
-      plan: 'Teste grátis',
-      headline: String(input.user.trialRemaining),
-      caption: input.user.trialRemaining === 1 ? 'figurinha grátis' : 'figurinhas grátis',
-      detail: 'nada pago ainda',
+      detail: input.lots ? creditExpiryDetail(input.lots, input.timeZone, input.user.balance) : 'avulsas',
       used,
       brand,
     };
@@ -70,9 +60,27 @@ export function buildStatusModel(input: {
   return { name, plan: 'Sem plano', headline: '0', caption: 'figurinhas', detail: 'veja /planos', used, brand };
 }
 
-function trialNote(user: UserRow): string {
-  if (user.trialRemaining <= 0) return '';
-  return `teste grátis: ${user.trialRemaining}`;
+function creditNote(lots: CreditLotView[] | undefined, timeZone: string, balance: number): string {
+  if (!lots) return `${balance} avulsas guardadas`;
+  return creditExpiryDetail(lots, timeZone, balance);
+}
+
+export function creditExpiryDetail(lots: CreditLotView[], timeZone: string, balance: number): string {
+  const expiring = new Map<number, number>();
+  let permanent = 0;
+  let tracked = 0;
+  for (const lot of lots) {
+    tracked += lot.remaining;
+    if (lot.expiresAt == null) permanent += lot.remaining;
+    else expiring.set(lot.expiresAt, (expiring.get(lot.expiresAt) ?? 0) + lot.remaining);
+  }
+  permanent += Math.max(0, balance - tracked);
+  const parts: string[] = [];
+  for (const expiresAt of [...expiring.keys()].sort((a, b) => a - b)) {
+    parts.push(`${expiring.get(expiresAt) ?? 0} até ${formatDate(expiresAt, timeZone)}`);
+  }
+  if (permanent > 0) parts.push(parts.length ? `${permanent} não vencem` : 'não vencem');
+  return parts.join(' · ') || 'avulsas';
 }
 
 export function renderStatusCardSvg(model: StatusModel): string {

@@ -23,7 +23,6 @@ export async function createHarness(adjust?: (input: { config: AppConfig; env: E
     MP_PAYER_FIRST_NAME: 'APRO',
   });
   const config = loadConfig();
-  config.trial.freeStickers = 0;
   config.safety.jitterMinMs = 0;
   config.safety.jitterMaxMs = 0;
   config.safety.perUserPerMinute = 20;

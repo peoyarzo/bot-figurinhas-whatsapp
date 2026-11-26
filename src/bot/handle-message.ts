@@ -16,8 +16,8 @@ export async function handleInbound(ctx: AppContext, msg: InboundMessage): Promi
     phone: msg.phone,
     pushName: msg.pushName ?? null,
     now: ctx.now(),
-    trial: ctx.config.trial.freeStickers,
   });
+  await ctx.db.expireCredits(msg.jid, ctx.now());
   if (!isAdmin && (await ctx.db.isPaused())) {
     ctx.log.info('bot pausado, mensagem ignorada', { phone: msg.phone });
     return;

@@ -27,6 +27,7 @@ export type PaymentRow = {
   kind: PlanKind;
   creditsSnapshot: number | null;
   durationDaysSnapshot: number | null;
+  creditsExpireDaysSnapshot: number | null;
   status: string;
   qrCode: string | null;
   createdAt: number;
@@ -51,7 +52,13 @@ export type SalesBucket = {
   byPlan: Array<{ planId: string; planName: string; count: number; amountCents: number }>;
 };
 
+export type CreditLot = {
+  remaining: number;
+  expiresAt: number | null;
+  createdAt: number;
+};
+
 export type ApplyOutcome =
-  | { outcome: 'applied'; jid: string; planName: string; kind: PlanKind; user: UserRow }
+  | { outcome: 'applied'; jid: string; planName: string; kind: PlanKind; user: UserRow; creditsExpiresAt: number | null }
   | { outcome: 'duplicate'; jid: string }
   | { outcome: 'missing' };

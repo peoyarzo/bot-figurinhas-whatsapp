@@ -78,6 +78,8 @@ describe('limites e fila', () => {
       );
       expect(garbage.join('\n')).toMatch(/Não consegui ler/);
       expect((await h.runtime.db.getUser(`${h.user}@s.whatsapp.net`))?.balance).toBe(14);
+      const lots = await h.runtime.db.listCreditLots(`${h.user}@s.whatsapp.net`, h.nowBox.value);
+      expect(lots.reduce((sum, lot) => sum + lot.remaining, 0)).toBe(14);
     } finally {
       await h.cleanup();
     }

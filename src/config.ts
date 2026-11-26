@@ -14,6 +14,8 @@ export type PlanDraft = {
   kind: PlanKind;
   credits: number | null;
   durationDays: number | null;
+  /** null = os créditos não vencem. Número positivo = vencem N dias depois da compra. */
+  creditsExpireDays: number | null;
   priceIsPlaceholder: boolean;
   active: boolean;
   sortOrder: number;
@@ -38,7 +40,6 @@ export type SafetyConfig = {
 
 export type AppConfig = {
   timeZone: string;
-  trial: { freeStickers: number };
   sticker: {
     packId: string;
     packName: string;
@@ -58,10 +59,6 @@ export type AppConfig = {
 
 const baseConfig: AppConfig = {
   timeZone: 'America/Sao_Paulo',
-  trial: {
-    // 0 desliga o teste. 1 dá uma figurinha na primeira conversa.
-    freeStickers: 1,
-  },
   sticker: {
     packId: 'figurinhas-bot',
     packName: 'Figurinhas',
@@ -103,6 +100,7 @@ const baseConfig: AppConfig = {
       kind: 'credits',
       credits: 15,
       durationDays: null,
+      creditsExpireDays: 30,
       priceIsPlaceholder: false,
       active: true,
       sortOrder: 1,
@@ -110,10 +108,11 @@ const baseConfig: AppConfig = {
     {
       id: 'pack25',
       name: '25 figurinhas',
-      priceCents: 650,
+      priceCents: 550,
       kind: 'credits',
       credits: 25,
       durationDays: null,
+      creditsExpireDays: null,
       priceIsPlaceholder: false,
       active: true,
       sortOrder: 2,
@@ -121,10 +120,11 @@ const baseConfig: AppConfig = {
     {
       id: 'weekly',
       name: 'Semanal ilimitado',
-      priceCents: 490,
+      priceCents: 790,
       kind: 'unlimited',
       credits: null,
       durationDays: 7,
+      creditsExpireDays: null,
       priceIsPlaceholder: false,
       active: true,
       sortOrder: 3,
@@ -132,10 +132,11 @@ const baseConfig: AppConfig = {
     {
       id: 'days30',
       name: '30 dias',
-      priceCents: 690,
+      priceCents: 1490,
       kind: 'unlimited',
       credits: null,
       durationDays: 30,
+      creditsExpireDays: null,
       priceIsPlaceholder: false,
       active: true,
       sortOrder: 4,
@@ -143,10 +144,11 @@ const baseConfig: AppConfig = {
     {
       id: 'months3',
       name: '3 meses',
-      priceCents: 1790,
+      priceCents: 1990,
       kind: 'unlimited',
       credits: null,
       durationDays: 90,
+      creditsExpireDays: null,
       priceIsPlaceholder: false,
       active: true,
       sortOrder: 5,

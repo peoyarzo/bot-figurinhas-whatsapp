@@ -107,10 +107,16 @@ export async function refreshPendingPayments(ctx: AppContext, jid: string, force
 async function notifyApplied(
   ctx: AppContext,
   jid: string,
-  result: { planName: string; kind: 'credits' | 'unlimited'; user: { hasInbound: boolean; balance: number; planExpiresAt: number | null } },
+  result: {
+    planName: string;
+    kind: 'credits' | 'unlimited';
+    creditsExpiresAt: number | null;
+    user: { hasInbound: boolean; balance: number; planExpiresAt: number | null };
+  },
 ): Promise<void> {
   if (!result.user.hasInbound) return;
-  const expiresLabel = result.user.planExpiresAt ? formatDate(result.user.planExpiresAt, ctx.config.timeZone) : null;
+  const expiresMs = result.kind === 'credits' ? result.creditsExpiresAt : result.user.planExpiresAt;
+  const expiresLabel = expiresMs ? formatDate(expiresMs, ctx.config.timeZone) : null;
   try {
     await ctx.messenger.sendText(jid, paidText({ planName: result.planName, kind: result.kind, balance: result.user.balance, expiresLabel }));
   } catch (error) {

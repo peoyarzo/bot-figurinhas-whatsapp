@@ -4,7 +4,7 @@ import { friendlyAlias } from '../plans.js';
 import type { SalesBucket } from '../types.js';
 import type { StatusModel } from '../stickers/status-card.js';
 
-export function menuText(trial: number, isAdmin: boolean): string {
+export function menuText(isAdmin: boolean): string {
   const lines = [
     'Oi. Eu transformo imagem, GIF ou vídeo curto (até 6 segundos) em figurinha.',
     '',
@@ -12,9 +12,9 @@ export function menuText(trial: number, isAdmin: boolean): string {
     '/planos — ver preços',
     '/comprar 15 — pagar o pacote no Pix',
     '/status — cartão com saldo e validade',
+    '',
+    'Não há figurinha grátis. Sem saldo, eu mando os planos.',
   ];
-  if (trial === 1) lines.push('', 'A primeira conversa ganha 1 figurinha de teste.');
-  else if (trial > 1) lines.push('', `A primeira conversa ganha ${trial} figurinhas de teste.`);
   if (isAdmin) {
     lines.push(
       '',
@@ -34,7 +34,7 @@ export function plansText(plans: Plan[], isAdmin: boolean): string {
   for (const plan of plans) {
     if (!plan.active && !isAdmin) continue;
     const price = plan.priceIsPlaceholder ? `${formatBrl(plan.priceCents)} (PREÇO PLACEHOLDER)` : formatBrl(plan.priceCents);
-    const detail = plan.kind === 'credits' ? `${plan.credits ?? 0} figurinhas` : `${plan.durationDays ?? 0} dias sem limite`;
+    const detail = planDetail(plan);
     lines.push(`• ${plan.name} — ${price}${plan.active ? '' : ' (inativo)'}`);
     lines.push(`  ${detail}`);
     lines.push(`  /comprar ${friendlyAlias(plan.id)}`);
@@ -43,7 +43,7 @@ export function plansText(plans: Plan[], isAdmin: boolean): string {
     lines.push(
       '',
       'Editar:',
-      '/planos set <id> preco 6,90',
+      '/planos set <id> preco 7,90',
       '/planos set <id> creditos 20',
       '/planos set <id> dias 7',
       '/planos set <id> nome Novo nome',
@@ -71,14 +71,19 @@ export function pixText(input: { intro: string; planName: string; amount: string
 }
 
 export function paidText(input: { planName: string; kind: 'credits' | 'unlimited'; balance: number; expiresLabel: string | null }): string {
-  if (input.kind === 'unlimited' && input.expiresLabel) {
-    return `Pagamento aprovado. ${input.planName} liberado até ${input.expiresLabel}. Pode mandar imagem, GIF ou vídeo curto.`;
+  if (input.kind === 'unlimited') {
+    if (input.expiresLabel) return `Pagamento aprovado. ${input.planName} liberado até ${input.expiresLabel}. Pode mandar imagem, GIF ou vídeo curto.`;
+    return `Pagamento aprovado. ${input.planName} liberado. Pode mandar imagem, GIF ou vídeo curto.`;
   }
-  return `Pagamento aprovado. ${input.planName} liberado. Saldo: ${input.balance} figurinhas.`;
+  if (input.expiresLabel) return `Pagamento aprovado. ${input.planName} liberado. Saldo: ${input.balance} figurinhas, válidas até ${input.expiresLabel}.`;
+  return `Pagamento aprovado. ${input.planName} liberado. Saldo: ${input.balance} figurinhas. Não vencem.`;
 }
 
-export function noBalanceText(): string {
-  return 'Seu saldo acabou. Veja /planos e use /comprar 15 (ou outro plano).';
+function planDetail(plan: Plan): string {
+  if (plan.kind === 'unlimited') return `${plan.durationDays ?? 0} dias sem limite`;
+  const credits = `${plan.credits ?? 0} figurinhas`;
+  if (plan.creditsExpireDays != null && plan.creditsExpireDays > 0) return `${credits}, valem ${plan.creditsExpireDays} dias`;
+  return `${credits}, não vencem`;
 }
 
 export function idleText(): string {
@@ -126,7 +131,7 @@ export function resumedText(): string {
 }
 
 export function statusCaption(model: StatusModel): string {
-  return `${model.plan} · ${model.headline} ${model.caption} · usadas ${model.used}`;
+  return `${model.plan} · ${model.headline} ${model.caption} · ${model.detail} · usadas ${model.used}`;
 }
 
 export function salesText(input: { day: SalesBucket; week: SalesBucket; month: SalesBucket }): string {

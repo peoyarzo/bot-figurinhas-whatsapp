@@ -34,6 +34,7 @@ export const SCHEMA: string[] = [
     kind TEXT NOT NULL,
     credits INTEGER,
     duration_days INTEGER,
+    credits_expire_days INTEGER,
     price_is_placeholder INTEGER NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1,
     sort_order INTEGER NOT NULL DEFAULT 0,
@@ -49,6 +50,7 @@ export const SCHEMA: string[] = [
     kind TEXT NOT NULL,
     credits_snapshot INTEGER,
     duration_days_snapshot INTEGER,
+    credits_expire_days_snapshot INTEGER,
     status TEXT NOT NULL,
     qr_code TEXT,
     created_at INTEGER NOT NULL,
@@ -80,6 +82,15 @@ export const SCHEMA: string[] = [
     plan_id TEXT NOT NULL,
     created_at INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS credit_lots (
+    id TEXT PRIMARY KEY,
+    jid TEXT NOT NULL,
+    remaining INTEGER NOT NULL,
+    granted INTEGER NOT NULL,
+    expires_at INTEGER,
+    created_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_credit_lots_jid ON credit_lots (jid, expires_at)`,
 ];
 
 export async function migrate(client: Client): Promise<void> {
@@ -96,4 +107,17 @@ export async function migrate(client: Client): Promise<void> {
   for (const statement of SCHEMA) {
     await client.execute(statement);
   }
+  await ensureColumn(client, 'plans', 'credits_expire_days', 'ALTER TABLE plans ADD COLUMN credits_expire_days INTEGER');
+  await ensureColumn(
+    client,
+    'payments',
+    'credits_expire_days_snapshot',
+    'ALTER TABLE payments ADD COLUMN credits_expire_days_snapshot INTEGER',
+  );
+}
+
+async function ensureColumn(client: Client, table: string, column: string, sql: string): Promise<void> {
+  const info = await client.execute(`PRAGMA table_info(${table})`);
+  const exists = info.rows.some((row) => String((row as unknown as Record<string, unknown>).name) === column);
+  if (!exists) await client.execute(sql);
 }

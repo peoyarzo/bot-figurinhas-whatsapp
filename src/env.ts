@@ -18,6 +18,8 @@ export type Env = {
   PUBLIC_BASE_URL?: string;
   PAIRING_NUMBER?: string;
   FFMPEG_PATH?: string;
+  /** Padrão true. `0`, `false` ou `off` desliga a figurinha com som no servidor. */
+  SOUND_STICKERS: boolean;
 };
 
 function read(source: NodeJS.ProcessEnv, key: string): string | undefined {
@@ -57,5 +59,15 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     PUBLIC_BASE_URL: base,
     PAIRING_NUMBER: pairing,
     FFMPEG_PATH: read(source, 'FFMPEG_PATH'),
+    SOUND_STICKERS: flagDefaultTrue(source, 'SOUND_STICKERS'),
   };
+}
+
+function flagDefaultTrue(source: NodeJS.ProcessEnv, key: string): boolean {
+  const value = read(source, key);
+  if (value == null) return true;
+  const cleaned = value.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+  if (['0', 'false', 'off', 'no', 'nao'].includes(cleaned)) return false;
+  if (['1', 'true', 'on', 'yes', 'sim'].includes(cleaned)) return true;
+  throw new Error(`${key} inválido`);
 }

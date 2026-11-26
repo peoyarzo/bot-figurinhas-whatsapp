@@ -6,12 +6,15 @@ import type { StatusModel } from '../stickers/status-card.js';
 
 export function menuText(isAdmin: boolean): string {
   const lines = [
-    'Oi. Eu transformo imagem, GIF ou vídeo curto (até 6 segundos) em figurinha.',
+    'Oi. Eu sou o Zapfig. Transformo imagem, GIF ou vídeo curto (até 6 segundos) em figurinha.',
+    'Vídeo com áudio pode sair com som. O recurso ainda está no beta do WhatsApp: em alguns celulares a figurinha chega muda.',
     '',
     '/menu — esta lista',
     '/planos — ver preços',
     '/comprar 15 — pagar o pacote no Pix',
     '/status — cartão com saldo e validade',
+    '/som on — figurinha com som quando houver áudio',
+    '/som off — figurinha muda',
     '',
     'Não há figurinha grátis. Sem saldo, eu mando os planos.',
   ];
@@ -123,11 +126,27 @@ export function unknownCommandText(): string {
 }
 
 export function pausedText(): string {
-  return 'Bot pausado. Eu não respondo ninguém até /retomar. A sessão do WhatsApp continua.';
+  return 'Zapfig pausado. Eu não respondo ninguém até /retomar. A sessão do WhatsApp continua.';
 }
 
 export function resumedText(): string {
-  return 'Bot retomado.';
+  return 'Zapfig retomado.';
+}
+
+export function soundOnText(): string {
+  return 'Som ligado. Vídeo e GIF com áudio viram figurinha com som. Continua valendo uma figurinha.';
+}
+
+export function soundOffText(): string {
+  return 'Som desligado. A figurinha sai muda.';
+}
+
+export function soundUsageText(enabled: boolean): string {
+  return `Som ${enabled ? 'ligado' : 'desligado'}. Use /som on ou /som off.`;
+}
+
+export function soundServerOffText(enabled: boolean): string {
+  return `Preferência salva: som ${enabled ? 'ligado' : 'desligado'}. Neste servidor SOUND_STICKERS está desligado, então a figurinha sai muda.`;
 }
 
 export function statusCaption(model: StatusModel): string {

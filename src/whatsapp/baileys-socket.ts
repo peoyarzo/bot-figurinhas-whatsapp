@@ -15,6 +15,7 @@ import { clearAuthState, useLibsqlAuthState } from './auth-state.js';
 import { ConnectionController, type SocketLike } from './connection.js';
 import type { Messenger } from './messenger.js';
 import { normalizeIncoming } from './normalize.js';
+import { relaySoundSticker } from './sound-sticker.js';
 
 type WaSocket = ReturnType<typeof makeWASocket>;
 
@@ -28,9 +29,13 @@ export function createBaileysMessenger(getSocket: () => WaSocket | null): Messen
       const sock = requireSocket(getSocket);
       await sock.sendMessage(jid, { image: buffer, caption });
     },
-    async sendSticker(jid, buffer) {
+    async sendSticker(jid, buffer, audio) {
       const sock = requireSocket(getSocket);
-      await sock.sendMessage(jid, { sticker: buffer });
+      if (!audio?.length) {
+        await sock.sendMessage(jid, { sticker: buffer });
+        return;
+      }
+      await relaySoundSticker(sock, jid, buffer, audio);
     },
     async sendTyping(jid) {
       const sock = requireSocket(getSocket);

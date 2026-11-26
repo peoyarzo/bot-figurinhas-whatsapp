@@ -68,7 +68,7 @@ export async function createRuntime(
     {
       sendText: (jid, text) => raw.sendText(jid, text),
       sendImage: (jid, buffer, caption) => raw.sendImage(jid, buffer, caption),
-      sendSticker: (jid, buffer) => raw.sendSticker(jid, buffer),
+      sendSticker: (jid, buffer, audio) => raw.sendSticker(jid, buffer, audio),
       sendTyping: (jid) => raw.sendTyping(jid),
     },
     db,

@@ -44,7 +44,7 @@ export function buildServer(deps: HttpDeps): FastifyInstance {
     const paused = await ctx.db.isPaused();
     return {
       ok: true,
-      service: 'figurinhas-bot',
+      service: 'zapfig',
       whatsapp: connection.snapshot().status,
       paused,
       uptimeSec: Math.round(process.uptime()),

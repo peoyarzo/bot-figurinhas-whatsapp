@@ -58,6 +58,7 @@ function mapUser(row: Record<string, unknown>): UserRow {
     planExpiresAt: numOrNull(row, 'plan_expires_at'),
     isVip: flag(row, 'is_vip'),
     hasInbound: flag(row, 'has_inbound'),
+    soundStickers: row.sound_stickers == null ? true : flag(row, 'sound_stickers'),
     createdAt: num(row, 'created_at'),
     updatedAt: num(row, 'updated_at'),
   };
@@ -206,6 +207,10 @@ export class Database {
     }
     await run(this.client, 'DELETE FROM vip_phones WHERE phone = ?', [phone]);
     await run(this.client, 'UPDATE users SET is_vip = 0, updated_at = ? WHERE phone = ? OR jid = ?', [now, phone, jid]);
+  }
+
+  async setSoundStickers(jid: string, enabled: boolean, now: number): Promise<void> {
+    await run(this.client, 'UPDATE users SET sound_stickers = ?, updated_at = ? WHERE jid = ?', [enabled ? 1 : 0, now, jid]);
   }
 
   async touchInbound(input: { jid: string; phone: string; pushName: string | null; now: number }): Promise<void> {

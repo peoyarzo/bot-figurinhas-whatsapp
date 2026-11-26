@@ -1,6 +1,6 @@
-# Bot de figurinhas para WhatsApp
+# Zapfig
 
-Bot que recebe imagem, GIF ou vídeo curto e devolve uma figurinha. Os planos são pagos com Pix do Mercado Pago, em sandbox. A sessão do WhatsApp fica no Turso, porque o disco do Render some. Este repositório é um protótipo: os testes e o `npm run demo` rodam com mocks e **não conectam número nenhum**.
+Bot de figurinhas para WhatsApp. Recebe imagem, GIF ou vídeo curto e devolve uma figurinha. Se o vídeo tiver áudio, a figurinha pode sair com som. Os planos são pagos com Pix do Mercado Pago, em sandbox. A sessão do WhatsApp fica no Turso, porque o disco do Render some. Este repositório é um protótipo: os testes e o `npm run demo` rodam com mocks e **não conectam número nenhum**.
 
 O código foi escrito do zero. A referência conceitual (um bot de figurinhas conhecido) não tem licença, então nada dela foi copiado.
 
@@ -16,6 +16,8 @@ O pacote está fixado em `@whiskeysockets/baileys@6.7.24`.
 
 A linha 6.7 é a estável. Ela já tem `makeWASocket`, o par `creds` + `keys` do auth state, `requestPairingCode` e o `DisconnectReason.loggedOut` (401) com o mesmo contrato há bastante tempo. A 7.0 ainda é release candidate (`7.0.0-rc.x`) e muda o protocolo entre RCs. Num serviço grátis que dorme e reconecta, uma RC aumenta a chance de a sessão cair a cada atualização. Por isso o pin é o último 6.7, não a 7.
 
+A figurinha com som não muda esse pin. O campo novo (`Message` 134) também não existe na `7.0.0-rc14`: o relato [WhiskeySockets/Baileys#2932](https://github.com/WhiskeySockets/Baileys/issues/2932) foi aberto nessa RC. Subir para a 7 não traz o proto e ainda troca o protocolo entre RCs. O envio com som fica num patch local de `proto.Message.encode`, só quando há áudio registrado para aquele webp. Sem esse registro, o encode original segue igual. Não usei `patch-package`: um patch em `node_modules` quebra no próximo `npm ci` de um Baileys patch, e o contorno é pequeno o bastante para ficar no código e nos testes.
+
 ## Arquitetura
 
 ```text
@@ -28,7 +30,7 @@ WhatsApp (Baileys 6.7)           HTTP (Fastify)
   fila (1–2 por vez, jitter, "digitando")
         |
         v
-  sharp (imagem → webp 512)  ou  ffmpeg (GIF/vídeo → webp animado)
+  sharp (imagem → webp 512)  ou  ffmpeg (GIF/vídeo → webp animado + opus, se houver áudio)
         |
         v
   Turso / libSQL  —  creds, chaves, saldo, planos, pagamentos
@@ -162,11 +164,12 @@ Estão todas no `.env.example`.
 | `PUBLIC_BASE_URL` | Origem pública, sem barra final. |
 | `PAIRING_NUMBER` | Chip novo, só dígitos. |
 | `FFMPEG_PATH` | Opcional. Se vazio, o bot procura `bin/ffmpeg`, o binário do `ffmpeg-static` e o `ffmpeg` do sistema, e fica com o primeiro que tenha `libwebp`. |
+| `SOUND_STICKERS` | Padrão ligado. `0`, `false` ou `off` desliga a figurinha com som no servidor. |
 | `BAILEYS_LOG_LEVEL` | Padrão `silent`. |
 
 ## Planos e texto
 
-Preço, validade, limites e o EXIF da figurinha ficam em `src/config.ts`. As frases ficam em `src/bot/texts.ts`.
+Preço, validade, limites e o EXIF da figurinha ficam em `src/config.ts`. O pacote da figurinha se chama Zapfig. As frases ficam em `src/bot/texts.ts`.
 
 | Id | O que é | Preço no config |
 | --- | --- | --- |
@@ -192,6 +195,8 @@ Quem usa o bot:
 - `/planos` — preços
 - `/comprar 15`, `/comprar 25`, `/comprar semanal`, `/comprar 30`, `/comprar trimestral`
 - `/status` ou `/saldo` — cartão (nome, plano, saldo ou validade, figurinhas usadas)
+- `/som on` — padrão. Vídeo ou GIF com áudio vira figurinha com som
+- `/som off` — a figurinha sai muda. A escolha fica no usuário
 
 Admin (o número tem que estar em `ADMIN_NUMBERS`):
 
@@ -225,7 +230,15 @@ Nada disso torna o cliente oficial. Continua sendo WhatsApp Web não oficial. Ve
 - GIF e vídeo: `ffmpeg`, corta em 6 segundos, 512×512, webp animado, até ~500 KB, com quedas de qualidade e de fps. Se não cabe, recusa.
 - O EXIF de pacote (`sticker-pack-name`, `sticker-pack-publisher`, id e emoji) sai de `config.sticker`.
 
-O `ffmpeg-static` usado aqui inclui `libwebp` e `libwebp_anim`, então o `npm install` no Render já traz o binário certo para o Linux do build. Se um dia esse binário não tiver o encoder, `npm run fetch-ffmpeg` baixa um ffmpeg estático público para `bin/ffmpeg` (sem conta e sem cartão) e o boot prefere esse arquivo. Dá para apontar `FFMPEG_PATH` para qualquer binário com `libwebp`.
+O `ffmpeg-static` usado aqui inclui `libwebp`, `libwebp_anim` e `libopus`, então o `npm install` no Render já traz o binário certo para o Linux do build. Se um dia esse binário não tiver o encoder, `npm run fetch-ffmpeg` baixa um ffmpeg estático público para `bin/ffmpeg` (sem conta e sem cartão) e o boot prefere esse arquivo. Dá para apontar `FFMPEG_PATH` para qualquer binário com `libwebp`.
+
+## Figurinha com som
+
+Quando o vídeo ou o GIF tem faixa de áudio, `SOUND_STICKERS` está ligado (padrão) e a pessoa não mandou `/som off`, o Zapfig gera o webp animado de sempre e um clipe Opus no mesmo tempo da figurinha. O áudio fica em no máximo 10 segundos e cerca de 1 MB. O ffmpeg usa `-vn -map 0:a:0 -c:a libopus`, mono, sem capa e sem Theora. O mimetype tem que ser exatamente `audio/ogg; codecs=opus` — `audio/ogg` sozinho desenha a figurinha e não toca.
+
+Os dois arquivos sobem com `prepareWAMessageMedia`. A mensagem continua sendo um sticker (`mediatype="sticker"`). Na hora de codificar, o `stickerMessage` de topo sai e entra o campo 134 (um FutureProof) com o sticker e, dentro dele, o campo 24 em 0 e o áudio no campo 26. É o contorno do issue 2932, já testado pela comunidade em envio e recebimento. Vale uma figurinha, não duas. Se extrair ou enviar o som falhar, sai a figurinha muda.
+
+O recurso está no beta do WhatsApp. Quem ainda não tem a versão pode receber a figurinha muda, sem mensagem de erro.
 
 ## Testes
 
@@ -242,6 +255,7 @@ Vitest cobre conversão (tamanho, transparência, EXIF, recusa), planos e saldo,
 - **Render free dorme, reinicia e esquece o disco.** O ping de 5 minutos reduz o sono, não o restart. A sessão sobrevive porque está no Turso. Se as 750 horas acabarem, o serviço para até o mês seguinte.
 - **Cold start** leva cerca de um minuto. Nesse intervalo o UptimeRobot pode marcar uma falha curta e o WhatsApp fica desconectado até o processo voltar e reler a sessão.
 - **Ban.** Baileys não é o app oficial. O WhatsApp pode desconectar ou banir o chip mesmo com limite, jitter e sem broadcast. Use um número novo, não o seu. Não mande figurinha em massa. Se cair em `loggedOut`, pareie de novo e diminua `dailyLimitAfterWarmup` e os limites por minuto.
+- **Som.** O campo 134 não está no proto oficial do Baileys. O patch só altera o encode quando o webp tem áudio registrado; o resto das mensagens usa o encoder original. Se o WhatsApp mudar o número do campo, o envio com som falha e o bot cai na figurinha muda. Um retry tardio, depois que o registro do áudio já foi apagado, também sai mudo. Clientes fora do beta recebem a figurinha sem som.
 - **Dinheiro.** Com token `TEST-` ninguém é cobrado. Não troque para o token de produção sem revisar o fluxo. O semanal custa R$ 7,90. O pacote de 25 custa R$ 5,50 e não vence; o de 15 custa R$ 3,50 e vence em 30 dias. Os ilimitados de 30 dias e de 3 meses custam R$ 14,90 e R$ 19,90.
 - **Grupos e desconhecidos.** O padrão é silêncio. Não adicione um comando de disparo: o guard existe para impedir exatamente isso.
 

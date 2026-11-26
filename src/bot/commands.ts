@@ -14,6 +14,10 @@ import {
   plansText,
   resumedText,
   salesText,
+  soundOffText,
+  soundOnText,
+  soundServerOffText,
+  soundUsageText,
   statusCaption,
   unknownCommandText,
 } from './texts.js';
@@ -55,6 +59,10 @@ export async function dispatchCommand(ctx: AppContext, msg: InboundMessage, comm
     await sendStatus(ctx, msg, isAdmin);
     return;
   }
+  if (name === 'som') {
+    await setSoundPreference(ctx, msg, command.args[0]);
+    return;
+  }
   if (!isAdmin) {
     if (['vendas', 'liberar', 'vip', 'unvip', 'pausar', 'retomar'].includes(name)) {
       await ctx.messenger.sendText(msg.jid, adminOnlyText());
@@ -90,6 +98,23 @@ export async function dispatchCommand(ctx: AppContext, msg: InboundMessage, comm
     return;
   }
   await ctx.messenger.sendText(msg.jid, unknownCommandText());
+}
+
+async function setSoundPreference(ctx: AppContext, msg: InboundMessage, raw: string | undefined): Promise<void> {
+  const choice = (raw ?? '').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+  const user = await ctx.db.getUser(msg.jid);
+  if (!user) return;
+  if (choice !== 'on' && choice !== 'off') {
+    await ctx.messenger.sendText(msg.jid, soundUsageText(user.soundStickers));
+    return;
+  }
+  const enabled = choice === 'on';
+  await ctx.db.setSoundStickers(msg.jid, enabled, ctx.now());
+  if (!ctx.env.SOUND_STICKERS) {
+    await ctx.messenger.sendText(msg.jid, soundServerOffText(enabled));
+    return;
+  }
+  await ctx.messenger.sendText(msg.jid, enabled ? soundOnText() : soundOffText());
 }
 
 async function sendStatus(ctx: AppContext, msg: InboundMessage, isAdmin: boolean): Promise<void> {

@@ -4,13 +4,13 @@ import type { Database } from '../db/database.js';
 export type Outbound =
   | { type: 'text'; jid: string; text: string }
   | { type: 'image'; jid: string; buffer: Buffer; caption?: string }
-  | { type: 'sticker'; jid: string; buffer: Buffer }
+  | { type: 'sticker'; jid: string; buffer: Buffer; audio?: Buffer }
   | { type: 'typing'; jid: string };
 
 export interface Messenger {
   sendText(jid: string, text: string): Promise<void>;
   sendImage(jid: string, buffer: Buffer, caption?: string): Promise<void>;
-  sendSticker(jid: string, buffer: Buffer): Promise<void>;
+  sendSticker(jid: string, buffer: Buffer, audio?: Buffer): Promise<void>;
   sendTyping(jid: string): Promise<void>;
 }
 
@@ -25,8 +25,8 @@ export class RecordingMessenger implements Messenger {
     this.sent.push({ type: 'image', jid, buffer, caption });
   }
 
-  async sendSticker(jid: string, buffer: Buffer): Promise<void> {
-    this.sent.push({ type: 'sticker', jid, buffer });
+  async sendSticker(jid: string, buffer: Buffer, audio?: Buffer): Promise<void> {
+    this.sent.push(audio?.length ? { type: 'sticker', jid, buffer, audio } : { type: 'sticker', jid, buffer });
   }
 
   async sendTyping(jid: string): Promise<void> {
@@ -60,9 +60,9 @@ export class GuardedMessenger implements Messenger {
     await this.inner.sendImage(jid, buffer, caption);
   }
 
-  async sendSticker(jid: string, buffer: Buffer): Promise<void> {
+  async sendSticker(jid: string, buffer: Buffer, audio?: Buffer): Promise<void> {
     await this.assert(jid);
-    await this.inner.sendSticker(jid, buffer);
+    await this.inner.sendSticker(jid, buffer, audio);
   }
 
   async sendTyping(jid: string): Promise<void> {

@@ -60,9 +60,9 @@ export type AppConfig = {
 const baseConfig: AppConfig = {
   timeZone: 'America/Sao_Paulo',
   sticker: {
-    packId: 'figurinhas-bot',
-    packName: 'Figurinhas',
-    author: 'Figurinhas',
+    packId: 'zapfig',
+    packName: 'Zapfig',
+    author: 'Zapfig',
     emojis: ['✨'],
     maxStaticBytes: 100 * 1024,
     maxAnimatedBytes: 500 * 1024,

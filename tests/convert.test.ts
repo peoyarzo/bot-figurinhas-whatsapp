@@ -60,7 +60,7 @@ describe('conversão de figurinha', () => {
     expect(meta.width).toBe(512);
     expect(meta.pageHeight ?? meta.height).toBe(512);
     expect((meta.pages ?? 1) > 1).toBe(true);
-    expect(readStickerExif(result.buffer)?.packName).toBe('Figurinhas');
+    expect(readStickerExif(result.buffer)?.packName).toBe('Zapfig');
     const refused = await mediaToSticker(video, 'video/mp4', { ...opts, maxAnimatedBytes: 80 });
     expect(refused.ok).toBe(false);
   }, 60_000);

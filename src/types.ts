@@ -13,6 +13,8 @@ export type UserRow = {
   planExpiresAt: number | null;
   isVip: boolean;
   hasInbound: boolean;
+  /** Padrão true: vídeo com áudio vira figurinha com som. `/som off` grava false. */
+  soundStickers: boolean;
   createdAt: number;
   updatedAt: number;
 };

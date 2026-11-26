@@ -10,7 +10,7 @@ export function homePage(input: { whatsapp: string; paused: boolean }): string {
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Figurinhas</title>
+  <title>Zapfig</title>
   <style>
     body { margin: 0; font-family: Inter, Liberation Sans, sans-serif; background: #101218; color: #f4f1ea; }
     main { max-width: 36rem; margin: 0 auto; padding: 2.5rem 1.25rem; }
@@ -21,7 +21,8 @@ export function homePage(input: { whatsapp: string; paused: boolean }): string {
 </head>
 <body>
   <main>
-    <h1>Figurinhas</h1>
+    <h1>Zapfig</h1>
+    <p>Bot de figurinhas.</p>
     <p>WhatsApp: <code>${escapeHtml(input.whatsapp)}</code></p>
     <p>Pausado: <code>${input.paused ? 'sim' : 'não'}</code></p>
     <p>Saúde do processo: <code>/health</code></p>

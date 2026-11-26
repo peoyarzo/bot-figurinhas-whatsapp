@@ -20,6 +20,7 @@ function user(partial: Partial<UserRow> = {}): UserRow {
     planExpiresAt: null,
     isVip: false,
     hasInbound: true,
+    soundStickers: true,
     createdAt: now,
     updatedAt: now,
     ...partial,
@@ -98,7 +99,7 @@ describe('planos, saldo e datas', () => {
         now: h.nowBox.value,
         planName: null,
         timeZone: 'America/Sao_Paulo',
-        brand: 'Figurinhas',
+        brand: 'Zapfig',
         lots,
       });
       expect(model.headline).toBe('39');

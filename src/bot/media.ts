@@ -1,7 +1,9 @@
 import type { AppContext } from '../context.js';
 import { zonedDayKey } from '../time.js';
 import type { InboundMessage } from '../types.js';
+import { extractStickerOpus, soundClipSeconds } from '../stickers/audio.js';
 import { mediaToSticker, stickerOptionsFromConfig } from '../stickers/convert.js';
+import type { Messenger } from '../whatsapp/messenger.js';
 import { dailyLimitFor } from '../safety/warmup.js';
 import { resolveEntitlement } from './entitlement.js';
 import { globalLimitText, plansText, queueFullText, rateLimitText, tooBigText, warmupText } from './texts.js';
@@ -80,7 +82,9 @@ export async function handleMedia(ctx: AppContext, msg: InboundMessage, isAdmin:
         await ctx.messenger.sendText(msg.jid, converted.reason);
         return;
       }
-      await ctx.messenger.sendSticker(msg.jid, converted.buffer);
+      const audio = await maybeSound(ctx, msg, converted.animated);
+      const delivered = await deliverSticker(ctx.messenger, msg.jid, converted.buffer, audio);
+      if (audio && delivered.soundError) ctx.log.warn('figurinha com som falhou, mandei muda', delivered.soundError);
       await ctx.db.incrementUsed(msg.jid, ctx.now());
     } catch (error) {
       await release();
@@ -88,6 +92,44 @@ export async function handleMedia(ctx: AppContext, msg: InboundMessage, isAdmin:
       await ctx.messenger.sendText(msg.jid, 'Não consegui converter essa mídia.');
     }
   });
+}
+
+export async function deliverSticker(
+  messenger: Messenger,
+  jid: string,
+  sticker: Buffer,
+  audio: Buffer | null,
+): Promise<{ mode: 'sound' | 'plain'; soundError?: unknown }> {
+  if (!audio?.length) {
+    await messenger.sendSticker(jid, sticker);
+    return { mode: 'plain' };
+  }
+  try {
+    await messenger.sendSticker(jid, sticker, audio);
+    return { mode: 'sound' };
+  } catch (soundError) {
+    await messenger.sendSticker(jid, sticker);
+    return { mode: 'plain', soundError };
+  }
+}
+
+function canCarryAudio(media: { kind: 'image' | 'video'; mimetype: string }): boolean {
+  return media.kind === 'video' || media.mimetype === 'image/gif' || media.mimetype.startsWith('video/');
+}
+
+async function maybeSound(ctx: AppContext, msg: InboundMessage, animated: boolean): Promise<Buffer | null> {
+  if (!animated || !ctx.env.SOUND_STICKERS || !msg.media || !canCarryAudio(msg.media)) return null;
+  const user = await ctx.db.getUser(msg.jid);
+  if (!user?.soundStickers) return null;
+  const extracted = await extractStickerOpus(msg.media.buffer, {
+    seconds: soundClipSeconds(ctx.config.sticker.maxAnimatedSeconds),
+    ffmpegPath: ctx.env.FFMPEG_PATH,
+  });
+  if (!extracted.ok) {
+    if (extracted.reason !== 'no-audio') ctx.log.warn('não extraí o áudio da figurinha', extracted.reason);
+    return null;
+  }
+  return extracted.buffer;
 }
 
 async function sendPlans(ctx: AppContext, jid: string, isAdmin: boolean): Promise<void> {

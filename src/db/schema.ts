@@ -114,6 +114,7 @@ export async function migrate(client: Client): Promise<void> {
     'credits_expire_days_snapshot',
     'ALTER TABLE payments ADD COLUMN credits_expire_days_snapshot INTEGER',
   );
+  await ensureColumn(client, 'users', 'sound_stickers', 'ALTER TABLE users ADD COLUMN sound_stickers INTEGER NOT NULL DEFAULT 1');
 }
 
 async function ensureColumn(client: Client, table: string, column: string, sql: string): Promise<void> {

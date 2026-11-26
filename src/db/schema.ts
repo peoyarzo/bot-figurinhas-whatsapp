@@ -91,6 +91,35 @@ export const SCHEMA: string[] = [
     created_at INTEGER NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_credit_lots_jid ON credit_lots (jid, expires_at)`,
+  `CREATE TABLE IF NOT EXISTS leads (
+    jid TEXT PRIMARY KEY,
+    phone TEXT NOT NULL,
+    push_name TEXT,
+    first_seen INTEGER NOT NULL,
+    last_seen INTEGER NOT NULL,
+    current_stage TEXT NOT NULL,
+    last_plan_id TEXT,
+    last_plan_name TEXT,
+    total_spent_cents INTEGER NOT NULL DEFAULT 0,
+    purchase_count INTEGER NOT NULL DEFAULT 0,
+    stickers_made INTEGER NOT NULL DEFAULT 0,
+    credits_left INTEGER NOT NULL DEFAULT 0,
+    expires_at INTEGER,
+    source TEXT,
+    notes TEXT NOT NULL DEFAULT '',
+    tags TEXT NOT NULL DEFAULT '',
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads (phone)`,
+  `CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads (current_stage)`,
+  `CREATE TABLE IF NOT EXISTS lead_events (
+    id TEXT PRIMARY KEY,
+    jid TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    detail TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_lead_events_jid ON lead_events (jid, created_at)`,
   `CREATE TABLE IF NOT EXISTS pending_media (
     jid TEXT PRIMARY KEY,
     kind TEXT NOT NULL,

@@ -4,6 +4,7 @@ import { formatBrl } from '../money.js';
 import { resolvePlanId } from '../plans.js';
 import { formatDate } from '../time.js';
 import { MockGateway, PaymentNotConfiguredError } from './gateway.js';
+import { crmEvent } from '../crm/record.js';
 import { buyHelpText, paidText, pixIntro, pixText, placeholderBuyText } from '../bot/texts.js';
 
 export async function startCheckout(ctx: AppContext, jid: string, token: string | undefined, isAdmin: boolean): Promise<void> {
@@ -28,6 +29,7 @@ export async function startCheckout(ctx: AppContext, jid: string, token: string 
   }
   const id = randomUUID();
   const now = ctx.now();
+  await crmEvent(ctx, jid, 'chose_plan', { detail: id, planId: plan.id, planName: plan.name });
   await ctx.db.insertPayment({ id, jid, plan, now });
   try {
     const created = await ctx.gateway.createPix({
@@ -41,9 +43,13 @@ export async function startCheckout(ctx: AppContext, jid: string, token: string 
     await ctx.db.attachPayment({ id, mpId: created.id, qrCode: created.qrCode, status: created.status, now });
     if (created.status === 'approved') {
       const result = await ctx.db.applyApproved(id, created.id, now);
-      if (result.outcome === 'applied') await notifyApplied(ctx, result.jid, result);
+      if (result.outcome === 'applied') {
+        await crmEvent(ctx, result.jid, 'paid', { detail: id, planId: plan.id, planName: plan.name, amountCents: plan.priceCents });
+        await notifyApplied(ctx, result.jid, result);
+      }
       return;
     }
+    await crmEvent(ctx, jid, 'pix_generated', { detail: id, planId: plan.id, planName: plan.name });
     await ctx.messenger.sendText(
       jid,
       pixText({
@@ -75,10 +81,21 @@ export async function processPaymentNotification(ctx: AppContext, mpId: string):
   }
   if (remote.status !== 'approved') {
     await ctx.db.markStatus(local.id, remote.status, ctx.now());
+    if (['cancelled', 'expired', 'rejected'].includes(remote.status)) {
+      await crmEvent(ctx, local.jid, 'pix_expired', { detail: local.id });
+    }
     return;
   }
   const result = await ctx.db.applyApproved(local.id, mpId, ctx.now());
-  if (result.outcome === 'applied') await notifyApplied(ctx, result.jid, result);
+  if (result.outcome === 'applied') {
+    await crmEvent(ctx, result.jid, 'paid', {
+      detail: local.id,
+      planId: local.planId,
+      planName: local.planName,
+      amountCents: local.amountCents,
+    });
+    await notifyApplied(ctx, result.jid, result);
+  }
 }
 
 export async function refreshPendingPayments(ctx: AppContext, jid: string, force: boolean): Promise<void> {
@@ -94,9 +111,20 @@ export async function refreshPendingPayments(ctx: AppContext, jid: string, force
       if (!remote) continue;
       if (remote.status === 'approved') {
         const result = await ctx.db.applyApproved(payment.id, payment.mpId, ctx.now());
-        if (result.outcome === 'applied') await notifyApplied(ctx, result.jid, result);
+        if (result.outcome === 'applied') {
+          await crmEvent(ctx, result.jid, 'paid', {
+            detail: payment.id,
+            planId: payment.planId,
+            planName: payment.planName,
+            amountCents: payment.amountCents,
+          });
+          await notifyApplied(ctx, result.jid, result);
+        }
       } else if (remote.status !== payment.status) {
         await ctx.db.markStatus(payment.id, remote.status, ctx.now());
+        if (['cancelled', 'expired', 'rejected'].includes(remote.status)) {
+          await crmEvent(ctx, payment.jid, 'pix_expired', { detail: payment.id });
+        }
       }
     } catch (error) {
       ctx.log.warn('falha ao consultar pagamento pendente', error);

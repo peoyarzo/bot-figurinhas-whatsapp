@@ -1,4 +1,5 @@
 import type { AppContext } from '../context.js';
+import { crmEvent } from '../crm/record.js';
 import { refreshPendingPayments } from '../payments/flow.js';
 import type { InboundMessage } from '../types.js';
 import { dispatchCommand, parseCommand } from './commands.js';
@@ -11,6 +12,7 @@ export async function handleInbound(ctx: AppContext, msg: InboundMessage): Promi
     return;
   }
   const isAdmin = ctx.env.ADMIN_NUMBERS.includes(msg.phone);
+  const before = await ctx.db.getUser(msg.jid);
   await ctx.db.touchInbound({
     jid: msg.jid,
     phone: msg.phone,
@@ -18,6 +20,14 @@ export async function handleInbound(ctx: AppContext, msg: InboundMessage): Promi
     now: ctx.now(),
   });
   await ctx.db.expireCredits(msg.jid, ctx.now());
+  const after = await ctx.db.getUser(msg.jid);
+  await crmEvent(ctx, msg.jid, 'first_contact', { phone: msg.phone, pushName: msg.pushName ?? null });
+  if (before && after && before.balance > 0 && after.balance === 0 && !(after.planExpiresAt != null && after.planExpiresAt > ctx.now())) {
+    await crmEvent(ctx, msg.jid, 'credits_ran_out');
+  }
+  if (after?.planExpiresAt != null && after.planExpiresAt <= ctx.now() && after.balance === 0) {
+    await crmEvent(ctx, msg.jid, 'plan_expired', { detail: String(after.planExpiresAt) });
+  }
   if (!isAdmin && (await ctx.db.isPaused())) {
     ctx.log.info('bot pausado, mensagem ignorada', { phone: msg.phone });
     return;

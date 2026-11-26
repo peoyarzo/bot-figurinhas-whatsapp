@@ -166,6 +166,14 @@ Estão todas no `.env.example`.
 | `FFMPEG_PATH` | Opcional. Se vazio, o bot procura `bin/ffmpeg`, o binário do `ffmpeg-static` e o `ffmpeg` do sistema, e fica com o primeiro que tenha `libwebp`. |
 | `SOUND_STICKERS` | Padrão ligado. `0`, `false` ou `off` desliga a figurinha com som no servidor. |
 | `BAILEYS_LOG_LEVEL` | Padrão `silent`. |
+| `ADMIN_PASSWORD` | Senha do painel `/admin`. Vazia: a rota responde 404. |
+| `ADMIN_SESSION_SECRET` | Segredo que assina o cookie da sessão. Defina junto com `ADMIN_PASSWORD`. |
+
+## Painel de contatos
+
+Quem manda mensagem vira um contato. O painel mostra quem comprou, qual plano, quem não comprou e em que etapa do funil a pessoa parou. Ele roda no mesmo serviço HTTP do Render, sem banco extra e sem serviço pago.
+
+No Render, defina `ADMIN_PASSWORD` (a senha do painel) e `ADMIN_SESSION_SECRET` (uma string longa e aleatória, só para assinar o cookie). Abra `https://SEU-APP.onrender.com/admin`. Se `ADMIN_PASSWORD` estiver vazio, essa URL responde 404. A sessão fica num cookie `HttpOnly`. O painel não envia mensagem: o link do WhatsApp só abre o chat para você escrever na mão. Dá para anotar notas e marcas, filtrar a lista e baixar CSV.
 
 ## Planos e texto
 

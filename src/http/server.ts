@@ -12,6 +12,7 @@ import { MockGateway } from '../payments/gateway.js';
 import type { ConnectionHandle } from '../whatsapp/connection.js';
 import type { RecordingMessenger } from '../whatsapp/messenger.js';
 import { homePage, qrPage } from './pages.js';
+import { registerAdmin } from './admin.js';
 
 export type HttpDeps = {
   ctx: AppContext;
@@ -136,6 +137,7 @@ export function buildServer(deps: HttpDeps): FastifyInstance {
     });
   }
 
+  registerAdmin(app, ctx);
   return app;
 }
 

@@ -4,6 +4,7 @@ import { storedFormat, type StickerFormat } from '../bot/format.js';
 import type { PlanDraft } from '../config.js';
 import { phoneFromJid, toJid } from '../phone.js';
 import type { ApplyOutcome, CreditLot, PaymentRow, Plan, SalesBucket, UserRow } from '../types.js';
+import { backfillLeads } from '../crm/repository.js';
 import { migrate } from './schema.js';
 
 type Runner = Pick<Client, 'execute'> | Pick<Transaction, 'execute'>;
@@ -117,6 +118,7 @@ export class Database {
 
   async migrate(): Promise<void> {
     await migrate(this.client);
+    await backfillLeads(this.client, Date.now());
   }
 
   async ping(): Promise<void> {

@@ -60,9 +60,13 @@ export class MockGateway implements PaymentGateway {
   }
 
   approve(id: string): boolean {
+    return this.setStatus(id, 'approved');
+  }
+
+  setStatus(id: string, status: string): boolean {
     const found = this.payments.get(id);
     if (!found) return false;
-    found.status = 'approved';
+    found.status = status;
     return true;
   }
 }

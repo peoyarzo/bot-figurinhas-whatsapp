@@ -20,6 +20,7 @@ export function menuText(isAdmin: boolean): string {
     '/formato esticar — estico até ocupar tudo',
     '',
     'Não há figurinha grátis. Sem saldo, eu mando os planos.',
+    'Seu número é usado só pra entregar suas figurinhas e créditos.',
   ];
   if (isAdmin) {
     lines.push(

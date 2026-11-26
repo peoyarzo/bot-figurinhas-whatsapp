@@ -5,6 +5,7 @@ import { fitForFormat, parseFormatChoice, PENDING_MEDIA_MS, type StickerFit } fr
 import { extractStickerOpus, soundClipSeconds } from '../stickers/audio.js';
 import { mediaToSticker, stickerOptionsFromConfig } from '../stickers/convert.js';
 import type { Messenger } from '../whatsapp/messenger.js';
+import { crmEvent } from '../crm/record.js';
 import { dailyLimitFor } from '../safety/warmup.js';
 import { resolveEntitlement } from './entitlement.js';
 import {
@@ -123,6 +124,10 @@ async function runSticker(
       const delivered = await deliverSticker(ctx.messenger, jid, converted.buffer, audio);
       if (audio && delivered.soundError) ctx.log.warn('figurinha com som falhou, mandei muda', delivered.soundError);
       await ctx.db.incrementUsed(jid, ctx.now());
+      await crmEvent(ctx, jid, 'sticker_made');
+      const buyer = await ctx.db.getUser(jid);
+      const unlimited = buyer?.planExpiresAt != null && buyer.planExpiresAt > ctx.now();
+      if (buyer && buyer.balance === 0 && !buyer.isVip && !unlimited) await crmEvent(ctx, jid, 'credits_ran_out');
     } catch (error) {
       await release();
       ctx.log.error('falha na figurinha', error);
@@ -219,6 +224,7 @@ async function maybeSound(ctx: AppContext, jid: string, media: MediaPayload, ani
 
 async function sendPlans(ctx: AppContext, jid: string, isAdmin: boolean): Promise<void> {
   if (!ctx.limiter.tryTake(`nobalance:${jid}`, 1)) return;
+  await crmEvent(ctx, jid, 'saw_plans');
   const plans = await ctx.db.listPlans();
   await ctx.messenger.sendText(jid, plansText(plans, isAdmin));
 }

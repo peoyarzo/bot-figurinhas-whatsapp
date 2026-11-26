@@ -20,6 +20,10 @@ export type Env = {
   FFMPEG_PATH?: string;
   /** Padrão true. `0`, `false` ou `off` desliga a figurinha com som no servidor. */
   SOUND_STICKERS: boolean;
+  /** Vazio desliga /admin (responde 404). */
+  ADMIN_PASSWORD?: string;
+  /** Assina o cookie da sessão do painel. Obrigatório junto com ADMIN_PASSWORD. */
+  ADMIN_SESSION_SECRET?: string;
 };
 
 function read(source: NodeJS.ProcessEnv, key: string): string | undefined {
@@ -60,6 +64,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     PAIRING_NUMBER: pairing,
     FFMPEG_PATH: read(source, 'FFMPEG_PATH'),
     SOUND_STICKERS: flagDefaultTrue(source, 'SOUND_STICKERS'),
+    ADMIN_PASSWORD: read(source, 'ADMIN_PASSWORD'),
+    ADMIN_SESSION_SECRET: read(source, 'ADMIN_SESSION_SECRET'),
   };
 }
 

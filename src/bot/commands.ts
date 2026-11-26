@@ -1,12 +1,13 @@
 import type { AppContext } from '../context.js';
 import { parseBrl, formatBrl } from '../money.js';
-import { normalizePhone } from '../phone.js';
+import { normalizePhone, toJid } from '../phone.js';
 import { resolvePlanId } from '../plans.js';
 import { parseFormatCommand } from './format.js';
 import { loadConfig } from '../config.js';
 import { buildStatusModel, renderStatusCard } from '../stickers/status-card.js';
 import { zonedStartOfDay, zonedStartOfMonth, zonedStartOfWeek } from '../time.js';
 import type { InboundMessage, Plan } from '../types.js';
+import { crmEvent } from '../crm/record.js';
 import { startCheckout } from '../payments/flow.js';
 import {
   adminOnlyText,
@@ -38,6 +39,7 @@ export function parseCommand(text: string): Command | null {
 export async function dispatchCommand(ctx: AppContext, msg: InboundMessage, command: Command, isAdmin: boolean): Promise<void> {
   const name = command.name === 'saldo' ? 'status' : command.name === 'ajuda' ? 'menu' : command.name;
   if (name === 'menu') {
+    await crmEvent(ctx, msg.jid, 'asked_help');
     await ctx.messenger.sendText(msg.jid, menuText(isAdmin));
     return;
   }
@@ -51,6 +53,7 @@ export async function dispatchCommand(ctx: AppContext, msg: InboundMessage, comm
       return;
     }
     const plans = await ctx.db.listPlans();
+    await crmEvent(ctx, msg.jid, 'saw_plans');
     await ctx.messenger.sendText(msg.jid, plansText(plans, isAdmin));
     return;
   }
@@ -187,6 +190,7 @@ async function liberate(ctx: AppContext, adminJid: string, args: string[]): Prom
     return;
   }
   const user = await ctx.db.grantPlan(phone, plan, ctx.now());
+  await crmEvent(ctx, user.jid, 'admin_released', { phone, detail: plan.id, planId: plan.id, planName: plan.name });
   const desc = plan.kind === 'credits' ? `${plan.credits ?? 0} figurinhas (saldo ${user.balance})` : `${plan.name} até ${new Date(user.planExpiresAt ?? 0).toISOString()}`;
   if (user.hasInbound) {
     await ctx.messenger.sendText(user.jid, `Liberado: ${plan.name}. Manda uma imagem quando quiser.`);
@@ -212,6 +216,7 @@ async function toggleVip(ctx: AppContext, adminJid: string, raw: string | undefi
     return;
   }
   await ctx.db.setVip(phone, enabled, ctx.now());
+  if (enabled) await crmEvent(ctx, toJid(phone), 'vip_granted', { phone, detail: phone });
   await ctx.messenger.sendText(adminJid, enabled ? `${phone} entrou na lista VIP (figurinhas sem descontar saldo).` : `${phone} saiu da lista VIP.`);
 }
 
